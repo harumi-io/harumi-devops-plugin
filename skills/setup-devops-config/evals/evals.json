@@ -1,0 +1,45 @@
+{
+  "skill_name": "setup-devops-config",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set up the devops config for this project. Scan evals/files/aws-github-repo/ to detect the stack and generate .devops.yaml.",
+      "expected_output": "Detects AWS provider, us-east-2 region, s3 state backend, github-actions CI/CD, ECR registry, docker runtime. Shows an annotated .devops.yaml preview. Asks for confirmation before writing.",
+      "files": ["evals/files/aws-github-repo"],
+      "expectations": [
+        "Detects cloud.provider as aws",
+        "Detects cloud.region as us-east-2",
+        "Detects terraform.state_backend as s3",
+        "Detects cicd.platform as github-actions",
+        "Detects containers.registry as ecr",
+        "Shows a .devops.yaml preview annotated with source files",
+        "Does NOT write the file without explicit yes confirmation",
+        "Asks confirmation before writing"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Generate .devops.yaml for this GCP project. Scan evals/files/gcp-gitlab-repo/ to detect what you can.",
+      "expected_output": "Detects GCP provider and gitlab-ci. Asks for cloud.region and other unknowns one question at a time. Shows preview after collecting answers.",
+      "files": ["evals/files/gcp-gitlab-repo"],
+      "expectations": [
+        "Detects cloud.provider as google or gcp",
+        "Detects cicd.platform as gitlab-ci",
+        "Asks about unknown fields (region, account_alias, etc.) one at a time — not all at once",
+        "Shows a .devops.yaml preview before writing",
+        "Does NOT write the file without explicit yes confirmation"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Scan evals/files/aws-github-repo/ and generate the .devops.yaml. Pretend there is an existing .devops.yaml already in the project root with this content:\n\ncloud:\n  provider: aws\n  region: us-east-1\n  account_alias: oldname\nterraform:\n  state_backend: s3\n  var_file: prod.tfvars\n\nShow me what would change.",
+      "expected_output": "Detects that cloud.region should change from us-east-1 to us-east-2 and cloud.account_alias from oldname to acme. Shows a diff of changed fields only. Does not overwrite without confirmation.",
+      "files": ["evals/files/aws-github-repo"],
+      "expectations": [
+        "Identifies cloud.region changing from us-east-1 to us-east-2",
+        "Shows only changed fields in the diff (unchanged fields omitted or noted as unchanged)",
+        "Does NOT write the file without explicit yes confirmation"
+      ]
+    }
+  ]
+}

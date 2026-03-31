@@ -1,0 +1,21 @@
+cloud:
+  provider: aws
+  region: us-east-2
+  account_alias: acme
+
+terraform:
+  version: "1.5.7"
+  state_backend: s3
+  var_file: prod.tfvars
+
+cicd:
+  platform: github-actions
+
+containers:
+  runtime: docker
+  registry: ecr
+
+naming:
+  pattern: "{namespace}-{stage}-{name}"
+  namespace: acme
+  stage: production
