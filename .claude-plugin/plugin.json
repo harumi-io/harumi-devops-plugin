@@ -1,7 +1,7 @@
 {
   "name": "claude-devops-plugin",
   "description": "DevOps skills for infrastructure, Kubernetes, CI/CD, and cloud operations",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Harumi.io",
     "email": "devops@harumi.io"

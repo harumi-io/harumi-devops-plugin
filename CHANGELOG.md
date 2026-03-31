@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - `setup-devops-config` skill: detects stack from codebase and generates `.devops.yaml`
 - Registered `setup-devops-config` in the `using-devops` bootstrap skill trigger rules
