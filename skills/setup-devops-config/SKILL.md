@@ -43,7 +43,7 @@ Use Glob and Grep tools to detect each field. Record confident values and a list
 
 **Omit the `kubernetes` section entirely** if no K8s manifests, Helm charts, or K8s-related CI/CD steps are found.
 
-**Omit the `observability` section** if no monitoring configs are found and all defaults would apply — note this in the preview instead.
+**Omit the `observability` section** if no monitoring-related files or configs are found at all (no prometheus, grafana, loki, tempo, datadog, cloudwatch, jaeger, xray references anywhere in the repo) — note the omission in the preview. If any monitoring tool is detected, include the full section even if only some fields are populated.
 
 ### Step 2: Ask about unknowns
 
@@ -69,6 +69,8 @@ An existing .devops.yaml was found. Here is what would change:
   terraform.var_file: (not set)  →  prod.tfvars  (detected from infrastructure/)
   [unchanged fields omitted]
 ```
+
+- If it **exists but no fields would change**: report "The existing `.devops.yaml` already matches what was detected. No changes needed." and stop — do not proceed to Step 4.
 
 ### Step 4: Show preview
 
@@ -113,7 +115,8 @@ Then ask:
 
 **If "edit":**
 - Ask: "Paste the corrected YAML below:"
-- Accept the user's YAML, show it as the new preview, ask again: "Write this to `.devops.yaml`? (yes / cancel)"
+- Accept the user's YAML, show it as the new preview, ask again: "Write this to `.devops.yaml`? (yes / edit / cancel)"
+- The edit option may be used multiple times until the user confirms or cancels.
 
 **If "cancel":**
 - Report: "Cancelled. No file was written."
@@ -125,3 +128,4 @@ Then ask:
 - Do not ask all unknown fields at once — one question at a time
 - Do not include source file comments in the written file — preview only
 - Do not invent values; if genuinely unknown and no default exists, ask
+- Do not run CLI commands (terraform, aws, kubectl, gcloud, az, etc.) during detection — use only Glob, Grep, and Read tools
