@@ -14,6 +14,7 @@ Use the Skill tool to invoke these when triggered:
 | Skill | Trigger | Use When |
 |-------|---------|----------|
 | `claude-devops-plugin:infrastructure` | `.tf` files, Terraform, AWS/GCP/Azure infra | Creating, modifying, or reviewing Terraform/IaC configurations |
+| `claude-devops-plugin:setup-devops-config` | User asks to create/set up `.devops.yaml`; no config exists | Setting up the plugin for a new repo |
 
 **Future skills** (not yet available):
 - `kubernetes` — K8s manifests, Helm charts, ArgoCD/Flux
@@ -31,6 +32,11 @@ Invoke `claude-devops-plugin:infrastructure` when you encounter ANY of:
 - IaC changes, module creation, state management
 - Infrastructure migrations or zero-downtime changes
 - Cost or security review of cloud resources
+
+Invoke `claude-devops-plugin:setup-devops-config` when you encounter ANY of:
+- User asks to create, generate, or set up `.devops.yaml`
+- User says "configure the plugin" or "set up devops config"
+- No `.devops.yaml` exists and the user is setting up the plugin for the first time
 
 ## Universal Safety Rules (NON-NEGOTIABLE)
 
