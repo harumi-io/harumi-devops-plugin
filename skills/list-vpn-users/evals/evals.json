@@ -1,0 +1,15 @@
+{
+  "skill_name": "list-vpn-users",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Who has VPN access?",
+      "expected_output": "Runs the list command and displays certificate information.",
+      "files": [],
+      "expectations": [
+        "Runs ./scripts/generate-vpn-certs.sh list",
+        "Displays the output showing certificates and their status"
+      ]
+    }
+  ]
+}
