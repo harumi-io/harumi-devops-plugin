@@ -1,0 +1,21 @@
+{
+  "skill_name": "rotate-access-keys",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Rotate the access keys for the airbyte-user-production service account. Yes, deactivate the old key.",
+      "expected_output": "Lists current keys, creates new key, displays credentials, deactivates old key. Does not delete old key.",
+      "files": [],
+      "expectations": [
+        "Runs aws iam list-access-keys to find current keys",
+        "Runs aws iam create-access-key to create new key",
+        "Displays the new access key ID and secret access key",
+        "Warns to save credentials and update services",
+        "Asks for confirmation before deactivating old key (or accepts pre-given confirmation)",
+        "Runs aws iam update-access-key with --status Inactive to deactivate old key",
+        "Does NOT delete the old key — only deactivates",
+        "Provides the delete command for the user to run later"
+      ]
+    }
+  ]
+}
