@@ -1,0 +1,18 @@
+{
+  "skill_name": "create-vpn-creds",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create VPN credentials for joao-silva.",
+      "expected_output": "Runs generate-vpn-certs.sh client joao-silva, then export joao-silva. Reports the .ovpn file path and distribution instructions.",
+      "files": [],
+      "expectations": [
+        "Runs ./scripts/generate-vpn-certs.sh client joao-silva",
+        "Runs ./scripts/generate-vpn-certs.sh export joao-silva",
+        "Reports the .ovpn file location at .vpn-pki/client-configs/joao-silva.ovpn",
+        "Includes security reminder about distribution (1Password or encrypted channel)",
+        "Does NOT send the .ovpn file contents in the chat"
+      ]
+    }
+  ]
+}
