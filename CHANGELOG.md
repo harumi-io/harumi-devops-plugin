@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+- 7 new operations command skills for daily DevOps tasks:
+  - `create-iam-user`: generate Terraform files for new IAM developer/admin users
+  - `remove-iam-user`: remove IAM user Terraform config and directory
+  - `create-service-account`: create IAM service accounts (simple or with access keys + Secrets Manager)
+  - `create-vpn-creds`: generate VPN client certificate and export `.ovpn` config
+  - `revoke-vpn-creds`: revoke VPN client certificates
+  - `list-vpn-users`: list all VPN certificates and their status
+  - `rotate-access-keys`: rotate IAM access keys (create new, deactivate old)
+- Registered all operations commands in `using-devops` bootstrap skill with trigger rules
+- Evals for all 7 operations command skills
+
 ## 0.2.0
 
 - `setup-devops-config` skill: detects stack from codebase and generates `.devops.yaml`
