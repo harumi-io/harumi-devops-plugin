@@ -1,0 +1,35 @@
+{
+  "skill_name": "create-service-account",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a service account called data-exporter. It does not need access keys.",
+      "expected_output": "Creates iam/service-accounts/data-exporter/ with main.tf using _base-module pattern. Adds module to iam/main.tf. Runs terraform plan. Handoff.",
+      "files": [],
+      "expectations": [
+        "Creates main.tf using the _base-module source pattern",
+        "Creates outputs.tf with user_name and user_arn",
+        "Does NOT create access keys or Secrets Manager resources",
+        "Adds module iam_service_accounts_data_exporter to iam/main.tf",
+        "Runs terraform validate and plan",
+        "Does NOT run terraform apply",
+        "Ends with apply handoff block"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create a service account called etl-pipeline that needs programmatic access keys.",
+      "expected_output": "Creates full pattern with aws_iam_user, aws_iam_access_key, aws_secretsmanager_secret. Module block passes environment and region. Handoff.",
+      "files": [],
+      "expectations": [
+        "Creates main.tf with aws_iam_user, aws_iam_access_key, aws_secretsmanager_secret, aws_secretsmanager_secret_version",
+        "Creates variables.tf with environment and region variables",
+        "Creates outputs.tf with user_name, user_arn, secret_arn",
+        "Secret name follows pattern service-account-etl-pipeline-credentials",
+        "Adds module to iam/main.tf passing environment and region",
+        "Does NOT run terraform apply",
+        "Ends with apply handoff block"
+      ]
+    }
+  ]
+}
