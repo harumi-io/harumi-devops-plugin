@@ -1,0 +1,17 @@
+{
+  "skill_name": "revoke-vpn-creds",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Revoke VPN access for erick-jesus. Yes, I confirm.",
+      "expected_output": "Lists current certs, confirms revocation, runs revoke command.",
+      "files": [],
+      "expectations": [
+        "Runs ./scripts/generate-vpn-certs.sh list to show current certificates",
+        "Asks for confirmation before revoking (or accepts the pre-given confirmation)",
+        "Runs ./scripts/generate-vpn-certs.sh revoke erick-jesus",
+        "Reports the result of the revocation"
+      ]
+    }
+  ]
+}
