@@ -1,0 +1,21 @@
+{
+  "skill_name": "remove-iam-user",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Remove the IAM user italo-rocha. Yes, I confirm.",
+      "expected_output": "Verifies user directory exists. Removes module block from iam/main.tf. Deletes iam/users/italo-rocha/ directory. Runs terraform plan. Ends with apply handoff.",
+      "files": [],
+      "expectations": [
+        "Checks that iam/users/italo-rocha/ exists",
+        "Asks for confirmation before proceeding (or accepts the pre-given confirmation)",
+        "Removes the module iam_users_italo_rocha block from iam/main.tf",
+        "Deletes the iam/users/italo-rocha/ directory",
+        "Runs terraform plan -var-file=prod.tfvars",
+        "Does NOT run terraform apply",
+        "Ends with apply handoff block",
+        "Reminds about revoking VPN credentials"
+      ]
+    }
+  ]
+}
