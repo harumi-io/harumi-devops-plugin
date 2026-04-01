@@ -13,7 +13,7 @@ Use the Skill tool to invoke these when triggered:
 
 | Skill | Trigger | Use When |
 |-------|---------|----------|
-| `harumi-devops-plugin:devops` | `.tf` files, Terraform, AWS/GCP/Azure infra | Creating, modifying, or reviewing Terraform/IaC configurations |
+| `harumi-devops-plugin:infrastructure` | `.tf` files, Terraform, AWS/GCP/Azure infra | Creating, modifying, or reviewing Terraform/IaC configurations |
 | `harumi-devops-plugin:setup-devops-config` | User asks to create/set up `.devops.yaml`; no config exists | Setting up the plugin for a new repo |
 
 ## Operations Commands
@@ -39,7 +39,7 @@ Quick-action skills for daily DevOps operations. Use the Skill tool to invoke:
 
 ## Trigger Rules
 
-Invoke `harumi-devops-plugin:devops` when you encounter ANY of:
+Invoke `harumi-devops-plugin:infrastructure` when you encounter ANY of:
 - `.tf` files or Terraform discussions
 - AWS, GCP, or Azure infrastructure tasks
 - IaC changes, module creation, state management

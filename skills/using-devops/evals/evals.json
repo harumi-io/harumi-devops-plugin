@@ -4,10 +4,10 @@
     {
       "id": 1,
       "prompt": "I have a main.tf file and I want to add a new ECS service to my AWS infrastructure. Where do I start?",
-      "expected_output": "Recognizes the .tf file mention and infrastructure context. Invokes or references the harumi-devops-plugin:devops skill to guide the work.",
+      "expected_output": "Recognizes the .tf file mention and infrastructure context. Invokes or references the harumi-devops-plugin:infrastructure skill to guide the work.",
       "files": [],
       "expectations": [
-        "Invokes or references the infrastructure skill (harumi-devops-plugin:devops)",
+        "Invokes or references the infrastructure skill (harumi-devops-plugin:infrastructure)",
         "Does not attempt to answer the Terraform question without consulting the infrastructure skill"
       ]
     },
