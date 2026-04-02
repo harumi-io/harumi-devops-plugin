@@ -18,11 +18,20 @@ This skill has two modes. Detect from user intent:
 
 If ambiguous, ask the user which mode they need.
 
+## Safety Rules (NON-NEGOTIABLE)
+
+These apply across both modes:
+
+1. **Never run `kubectl apply` without user confirmation** — Always provide the exact command and wait for "yes"
+2. **Never restart, scale, or delete resources** in investigate mode without explicit user confirmation
+3. **Always state what command you're about to run and why** before running it
+4. **If a command requires credentials or access the user hasn't set up**, ask rather than assume
+
 ## Author Mode
 
 ### Workflow
 
-1. **Read context** — Check `.devops.yaml` for stack, scan `docs/references/` for service/architecture context
+1. **Read context** — Check `.devops.yaml` for stack, scan the project's `docs/references/` for service topology and runbooks
 2. **Understand intent** — What metric/log/trace? What threshold? What service?
 3. **Write artifact** — Query, alert rule YAML, or dashboard JSON
 4. **Validate** — Run `promtool check rules` for alert rules, JSON lint for dashboards if available
@@ -49,6 +58,9 @@ If ambiguous, ask the user which mode they need.
 - Search [grafana.com/grafana/dashboards/](https://grafana.com/grafana/dashboards/) for existing templates first
 - Dashboard UID pattern: `harumi-[category]-[name]`
 - Datasource: always `type: "prometheus"`, `uid: "prometheus"`
+
+> **Note:** The UID pattern and datasource UID above are Harumi defaults. Confirm with the user if working on a different stack.
+
 - 24-column grid layout (quarters w:6, thirds w:8, halves w:12, full w:24)
 - Generate both `[name].json` and `[name].configmap.yaml`
 - ConfigMap labels: `grafana_dashboard: "1"`, `app.kubernetes.io/name: grafana`, `app.kubernetes.io/component: dashboard`
@@ -72,7 +84,7 @@ After writing artifacts:
 1. Validate if tooling exists (`promtool check rules`, `jq` for JSON)
 2. Show diff summary to user
 3. Offer to commit — user confirms with "yes"
-4. If K8s deployment needed, provide `kubectl apply` handoff (never apply without confirmation)
+4. If K8s deployment needed, provide `kubectl apply` handoff
 
 ## Investigate Mode
 
@@ -87,7 +99,7 @@ See [references/investigation.md](references/investigation.md) for detailed meth
 ### Workflow
 
 1. **Triage** — Classify the problem: latency, errors, saturation, crash, connectivity
-2. **Read context** — Check `.devops.yaml` for stack, scan `docs/references/` for service topology and runbooks
+2. **Read context** — Check `.devops.yaml` for stack, scan the project's `docs/references/` for service topology and runbooks
 3. **Gather signals** — Run read-only CLI commands across three pillars (metrics, logs, traces)
 4. **Correlate** — Connect metrics anomalies to log patterns to trace spans. Present a timeline.
 5. **Diagnose** — Propose root cause with supporting evidence
@@ -105,16 +117,10 @@ Priority order:
 
 | Pillar | Commands |
 |--------|----------|
-| Metrics | `promtool query instant/range` against Prometheus API, `curl` Prometheus HTTP API |
+| Metrics | `curl 'http://prometheus:9090/api/v1/query?query=...'` (instant), `curl 'http://prometheus:9090/api/v1/query_range?...'` (range) |
 | Logs | `logcli query` against Loki, `logcli series` |
 | Traces | `curl` Tempo HTTP API (`/api/traces/{traceID}`, `/api/search`) |
 | K8s | `kubectl logs`, `kubectl top`, `kubectl get events`, `kubectl describe` |
-
-### Safety Rules (NON-NEGOTIABLE)
-
-1. **All investigation commands are read-only** — no restarts, no scaling, no deletes without user saying "yes"
-2. **Always state what command you're about to run and why** before running it
-3. **If a command requires credentials or access the user hasn't set up**, ask rather than assume
 
 ## Reference Documentation
 
