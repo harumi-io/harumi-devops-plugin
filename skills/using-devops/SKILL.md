@@ -17,6 +17,7 @@ Use the Skill tool to invoke these when triggered:
 | `harumi-devops-plugin:setup-devops-config` | User asks to create/set up `.devops.yaml`; no config exists | Setting up the plugin for a new repo |
 | `harumi-devops-plugin:kubernetes` | K8s manifests, Helm, kubectl, pod issues, RBAC | Working with Kubernetes resources, debugging, manifest authoring |
 | `harumi-devops-plugin:argocd` | ArgoCD Applications, sync issues, GitOps deployment | Managing ArgoCD apps, app-of-apps, onboarding services |
+| `harumi-devops-plugin:observability` | Monitoring, alerting, dashboards, PromQL/LogQL, incident investigation | Query authoring, alert rules, Grafana dashboards, active incident debugging |
 
 ## Operations Commands
 
@@ -40,7 +41,6 @@ Quick-action skills for daily DevOps operations. Use the Skill tool to invoke:
 **Future skills** (not yet available):
 - `cicd` — CI/CD pipeline configs, deployment workflows
 - `cost-optimization` — Resource sizing, cost analysis
-- `observability` — Monitoring, alerting, dashboards
 - `containers` — Dockerfiles, image builds, registries
 
 ## Trigger Rules
@@ -106,6 +106,12 @@ Invoke `harumi-devops-plugin:debug-pod` when:
 
 Invoke `harumi-devops-plugin:scale-deployment` when:
 - User wants to scale up, scale down, or change replica count of a deployment
+
+Invoke `harumi-devops-plugin:observability` when:
+- User asks about metrics, logs, traces, alerts, or dashboards
+- User mentions PromQL, LogQL, Grafana, Prometheus, Loki, Tempo
+- User says "investigate", "debug", "what's wrong with", "why is X slow/down"
+- User references monitoring, alerting, SLOs, SLIs, error rates
 
 ## Universal Safety Rules (NON-NEGOTIABLE)
 
