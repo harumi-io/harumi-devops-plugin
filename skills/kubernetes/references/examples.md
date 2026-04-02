@@ -6,7 +6,7 @@ Config-driven examples using `.devops.yaml` values. Replace placeholders with ac
 
 | Placeholder | Source in `.devops.yaml` |
 |-------------|------------------------|
-| `<namespace>` | `naming.namespace` |
+| `<app-namespace>` | The application namespace name (e.g., derived from `naming.namespace` and app name) |
 | `<stage>` | `naming.stage` |
 | `<naming-pattern>` | `naming.pattern` |
 | `<context>` | `kubernetes.clusters[].context` |
@@ -102,6 +102,8 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: <acm-cert-arn>
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
 spec:
   rules:
     - host: <app-name>.<domain>

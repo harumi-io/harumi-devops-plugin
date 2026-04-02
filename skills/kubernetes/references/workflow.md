@@ -19,8 +19,9 @@ Always verify current state before changes. Never assume.
 kubectl cluster-info --context <context>
 kubectl get nodes --context <context>
 
-# Namespace resources
+# Namespace resources (note: kubectl get all omits CRDs, PVCs, ConfigMaps, Secrets, ServiceAccounts)
 kubectl get all -n <namespace> --context <context>
+kubectl get pvc,configmap,secret,serviceaccount -n <namespace> --context <context>
 
 # Specific resource
 kubectl describe <resource-type> <name> -n <namespace> --context <context>
