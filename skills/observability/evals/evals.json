@@ -1,0 +1,82 @@
+{
+  "skill_name": "observability",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Write a PromQL query to get the P95 latency for the API service over the last 5 minutes.",
+      "expected_output": "Returns a PromQL query using histogram_quantile with http_request_duration_seconds_bucket.",
+      "files": [],
+      "expectations": [
+        "Uses histogram_quantile(0.95, ...)",
+        "Uses rate() with [5m] range",
+        "Aggregates by (le)",
+        "Targets http_request_duration_seconds_bucket metric",
+        "Query is syntactically valid PromQL"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Create a Prometheus alert rule that fires when error rate exceeds 5% for 5 minutes.",
+      "expected_output": "Returns a valid Prometheus alerting rule YAML with proper labels and annotations.",
+      "files": [],
+      "expectations": [
+        "Valid YAML with groups/rules structure",
+        "Uses rate() for both error and total requests",
+        "Threshold is 0.05 (5%)",
+        "Has for: 5m duration",
+        "Includes severity label",
+        "Includes summary and description annotations with template variables",
+        "Offers to validate with promtool check rules",
+        "Offers to write to file and commit"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a Grafana dashboard for monitoring the API service with RED metrics.",
+      "expected_output": "Returns a complete Grafana dashboard JSON with panels for rate, errors, and duration.",
+      "files": [],
+      "expectations": [
+        "Valid dashboard JSON with schemaVersion 38",
+        "Dashboard UID follows harumi-[category]-[name] pattern",
+        "Includes stat or timeseries panels for request rate",
+        "Includes panel for error rate",
+        "Includes panel for latency percentiles (P50, P95, P99)",
+        "All panels use datasource type prometheus uid prometheus",
+        "Follows 24-column grid layout",
+        "Generates accompanying ConfigMap YAML",
+        "Offers to write files and commit"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "The API is returning 500 errors intermittently. Investigate.",
+      "expected_output": "Enters investigate mode, runs read-only CLI commands, correlates metrics/logs/traces, presents diagnosis.",
+      "files": [],
+      "expectations": [
+        "Enters investigate mode (not author mode)",
+        "Checks .devops.yaml for observability stack configuration",
+        "Runs kubectl commands to check pod status and events",
+        "Queries error rate metrics via Prometheus API",
+        "Queries error logs via logcli or Loki API",
+        "All commands are read-only",
+        "States what each command does before running it",
+        "Presents root cause analysis with evidence",
+        "Recommends actions — destructive ones require confirmation"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Write a LogQL query to find all error logs from the production namespace in the last hour, grouped by service.",
+      "expected_output": "Returns a LogQL metric query using count_over_time with json parser and sum by.",
+      "files": [],
+      "expectations": [
+        "Uses {namespace=\"production\"} stream selector",
+        "Uses json or logfmt parser",
+        "Filters on level=\"error\"",
+        "Uses count_over_time or rate with [1h] range",
+        "Aggregates with sum by (service or container)",
+        "Query is syntactically valid LogQL"
+      ]
+    }
+  ]
+}
