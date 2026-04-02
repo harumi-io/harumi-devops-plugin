@@ -59,7 +59,7 @@ These apply across both modes:
 - Dashboard UID pattern: `harumi-[category]-[name]`
 - Datasource: always `type: "prometheus"`, `uid: "prometheus"`
 
-> **Note:** The UID pattern and datasource UID above are Harumi defaults. Confirm with the user if working on a different stack.
+> **Note:** The UID pattern and datasource UID above are Harumi defaults from `.devops.yaml`. Read the `observability` section of `.devops.yaml` for overrides, or confirm with the user if working on a different stack.
 
 - 24-column grid layout (quarters w:6, thirds w:8, halves w:12, full w:24)
 - Generate both `[name].json` and `[name].configmap.yaml`
