@@ -44,7 +44,7 @@ metric_name{label="value", label2=~"regex.*"}[time_range]
 | `count()` | Count series | `count by (phase) (kube_pod_status_phase)` |
 | `avg()` | Average | `avg(rate(node_cpu_seconds_total{mode!="idle"}[5m]))` |
 | `max()/min()` | Extremes | `max(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)` |
-| `histogram_quantile()` | Percentiles from histograms | `histogram_quantile(0.95, sum(rate(bucket[5m])) by (le))` |
+| `histogram_quantile()` | Percentiles from histograms | `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))` |
 | `topk()/bottomk()` | Top/bottom N series | `topk(5, sum by (pod) (container_memory_usage_bytes))` |
 | `vector()` | Constant scalar as vector | `sum(metric) or vector(0)` |
 | `absent()` | Alert when metric missing | `absent(up{job="api"})` |
@@ -52,7 +52,7 @@ metric_name{label="value", label2=~"regex.*"}[time_range]
 | `delta()` | Difference over range (gauge) | `delta(temperature[1h])` |
 | `deriv()` | Per-second derivative (gauge) | `deriv(node_filesystem_avail_bytes[1h])` |
 | `predict_linear()` | Linear prediction | `predict_linear(node_filesystem_avail_bytes[6h], 24*3600)` |
-| `clamp_min()/clamp_max()` | Clamp values | `clamp_min(free_bytes, 0)` |
+| `clamp_min()/clamp_max()` | Clamp values | `clamp_min(node_filesystem_avail_bytes, 0)` |
 
 ## Offset and Subqueries
 
@@ -73,13 +73,13 @@ avg_over_time(cpu_usage[1h])
 
 ```promql
 sum(kube_node_status_condition{condition="Ready",status="true"})  # Ready nodes
-count by (label_node_kubernetes_io_capacity_type) (kube_node_info) # By type
+count by (label_node_kubernetes_io_capacity_type) (kube_node_info) # By capacity type (AWS/EKS-specific label)
 ```
 
 ### Pods
 
 ```promql
-count by (phase) (kube_pod_status_phase)                          # By phase
+count by (phase) (kube_pod_status_phase == 1)                     # By phase (active only)
 sum(kube_pod_status_phase{phase="Pending"})                        # Pending
 sum by (namespace, pod) (kube_pod_container_status_restarts_total) # Restarts
 sum(kube_pod_status_ready{condition="false"})                      # Not ready
@@ -143,12 +143,17 @@ histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by 
 
 ```promql
 # CPU utilization % (requests-based)
-sum(rate(container_cpu_usage_seconds_total{namespace="production"}[5m]))
-/ sum(kube_pod_container_resource_requests{namespace="production", resource="cpu"}) * 100
+(
+  sum(rate(container_cpu_usage_seconds_total{namespace="production"}[5m]))
+  / sum(kube_pod_container_resource_requests{namespace="production", resource="cpu"})
+) * 100
 
-# Error budget (99.9% SLO over 30d)
-1 - (sum(rate(http_requests_total{status_code=~"5.."}[30d]))
-/ sum(rate(http_requests_total[30d]))) >= 0.999
+# Error budget consumption (99.9% SLO) — use in alerting rules, not dashboard panels
+# Error rate over 30d:
+sum(rate(http_requests_total{status_code=~"5.."}[30d]))
+/ sum(rate(http_requests_total[30d]))
+# Remaining budget (subtract from 1, compare to 0.001 = 0.1% budget):
+1 - (sum(rate(http_requests_total{status_code=~"5.."}[30d])) / sum(rate(http_requests_total[30d])))
 
 # Memory saturation by namespace
 sum by (namespace) (container_memory_usage_bytes)
