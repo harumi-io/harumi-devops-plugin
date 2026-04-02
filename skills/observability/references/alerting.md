@@ -35,7 +35,7 @@ groups:
 ```yaml
 - alert: HighCPUUtilization
   expr: |
-    100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+    (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 85
   for: 10m
   labels:
     severity: warning
@@ -90,8 +90,8 @@ groups:
     summary: "Node {{ $labels.node }} not ready"
 
 - alert: PodCrashLooping
-  expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
-  for: 5m
+  expr: increase(kube_pod_container_status_restarts_total[1h]) > 3
+  for: 2m
   labels:
     severity: warning
   annotations:
@@ -127,7 +127,7 @@ groups:
     severity: critical
   annotations:
     summary: "Error rate above 5% for API"
-    description: "Current error rate: {{ $value | printf \"%.2f\" }}%"
+    description: "Current error rate: {{ $value | humanizePercentage }}"
 ```
 
 ### Duration
@@ -165,13 +165,13 @@ groups:
 - alert: ErrorBudgetBurnRate
   expr: |
     (
-      sum(rate(http_requests_total{status_code=~"5.."}[1h]))
-      / sum(rate(http_requests_total[1h]))
+      sum(rate(http_requests_total{job="api",status_code=~"5.."}[1h]))
+      / sum(rate(http_requests_total{job="api"}[1h]))
     ) > (14.4 * (1 - 0.999))
     and
     (
-      sum(rate(http_requests_total{status_code=~"5.."}[5m]))
-      / sum(rate(http_requests_total[5m]))
+      sum(rate(http_requests_total{job="api",status_code=~"5.."}[5m]))
+      / sum(rate(http_requests_total{job="api"}[5m]))
     ) > (14.4 * (1 - 0.999))
   for: 2m
   labels:
