@@ -259,7 +259,6 @@ on:
   push:
     branches:
       - dev
-      - 'feat/dev*'
 
 permissions:
   id-token: write
@@ -383,22 +382,6 @@ echo "Done."
 ```
 
 > **This step is mandatory.** Without it, the `git push` in the CI workflow will fail with a 403 if `dev` is a protected branch.
-
-## Testing on a Feature Branch
-
-1. Create a branch matching `feat/dev*` (e.g., `feat/dev-my-feature`) and push
-2. The CI workflow triggers automatically
-3. Point ArgoCD at the feature branch:
-   ```bash
-   kubectl -n argocd patch application <app-name> --type merge \
-     -p '{"spec":{"source":{"targetRevision":"feat/dev-my-feature"}}}'
-   ```
-4. Test at `https://<domain>`
-5. After merging, reset ArgoCD to track `dev`:
-   ```bash
-   kubectl -n argocd patch application <app-name> --type merge \
-     -p '{"spec":{"source":{"targetRevision":"dev"}}}'
-   ```
 
 ## Handoff Template
 
