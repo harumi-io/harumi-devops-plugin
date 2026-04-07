@@ -1,22 +1,30 @@
 ---
 name: deploy-app
-description: "Onboard or update an application deployment for ArgoCD on EKS dev. Generates deploy-dev/ manifests and a GitHub Actions CI write-back workflow. Use when: user wants to deploy, onboard, or add an app to the dev cluster."
+description: "Onboard or update an application deployment for ArgoCD. Supports dev (deploy-dev/ on dev branch) and prod (deploy/ on main branch) environments. Generates manifests and a GitHub Actions CI write-back workflow. Use when: user wants to deploy, onboard, or add an app to ArgoCD."
 ---
 
 # Deploy App
 
-Onboard a new application or update an existing one for ArgoCD management on the dev cluster. Uses the CI write-back pattern: manifests live in `deploy-dev/` inside the app repo; the CI pipeline writes the image tag back on every push.
+Onboard a new application or update an existing one for ArgoCD management. Uses the CI write-back pattern: manifests live in the app repo; the CI pipeline writes the image tag back on every push.
 
 ## Inputs
 
 Ask for these if not provided:
 
 1. **App name** (e.g., `frontend`, `harumi-api`)
-2. **App port** (e.g., `3000`, `8000`)
-3. **Health check path** (e.g., `/api/health`, `/health`)
-4. **ECR repository name** (defaults to `harumi-dev-<app-name>`)
-5. **App repo** — the GitHub repository name (e.g., `harumi-io/frontend`)
-6. **Target cluster** — from `.devops.yaml` `kubernetes.clusters[]` list
+2. **Environment** — `dev` or `prod`
+3. **App port** (e.g., `3000`, `8000`)
+4. **Health check path** (e.g., `/api/health`, `/health`)
+5. **ECR repository name** (defaults to `harumi-dev-<app-name>` for dev, `harumi-<app-name>` for prod)
+6. **App repo** — the GitHub repository name (e.g., `harumi-io/frontend`)
+7. **Target cluster** — from `.devops.yaml` `kubernetes.clusters[]` list
+
+## Environment Reference
+
+| Environment | Reference file | Manifest dir | Branch | CI workflow file |
+|-------------|---------------|-------------|--------|-----------------|
+| dev | `references/ci-writeback-pattern.md` | `deploy-dev/` | `dev` | `cd-eks-dev.yaml` |
+| prod | `references/ci-writeback-prod.md` | `deploy/` | `main` | `cd-eks.yaml` |
 
 ## Execution Steps
 
@@ -29,7 +37,7 @@ Read `.devops.yaml` for:
 - `kubernetes.clusters[]` — target cluster context, domain, registry, region
 - `naming` — resource naming pattern
 
-Resolve all placeholders from `references/ci-writeback-pattern.md` using these values plus user input. If App repo was provided as `org/repo` format (e.g., `harumi-io/frontend`), split it: `<org>` = `harumi-io`, `<app-repo>` = `frontend`.
+Resolve all placeholders from the environment's reference file using these values plus user input. If App repo was provided as `org/repo` format (e.g., `harumi-io/frontend`), split it: `<org>` = `harumi-io`, `<app-repo>` = `frontend`.
 
 ### Step 2: Inspect cluster state
 
@@ -46,29 +54,36 @@ aws ecr describe-repositories --repository-names <ecr-repo> --region <aws-region
 
 If the app already exists in ArgoCD, report the conflict and ask the user how to proceed (update manifests vs. skip).
 
-### Step 3: Generate deploy-dev/ manifests
+### Step 3: Generate manifests
 
-Using the templates in `references/ci-writeback-pattern.md`, create these files in the app repo:
+Using the templates in the environment's reference file, create these files in the app repo:
 
-- `deploy-dev/namespace.yaml`
-- `deploy-dev/configmap.yaml`
-- `deploy-dev/externalsecret.yaml` (only if the app reads secrets)
-- `deploy-dev/deployment.yaml`
-- `deploy-dev/service.yaml`
-- `deploy-dev/ingress.yaml`
+**For dev:**
+- `deploy-dev/namespace.yaml`, `deploy-dev/configmap.yaml`, `deploy-dev/externalsecret.yaml` (if secrets needed), `deploy-dev/deployment.yaml`, `deploy-dev/service.yaml`, `deploy-dev/ingress.yaml`
 - `argocd-app.yaml` (repo root — NOT inside `deploy-dev/`)
+
+**For prod:**
+- `deploy/namespace.yaml`, `deploy/configmap.yaml`, `deploy/externalsecret.yaml` (if secrets needed), `deploy/deployment.yaml`, `deploy/service.yaml`, `deploy/ingress.yaml`
+- `argocd-app.yaml` (repo root — NOT inside `deploy/`)
 
 ### Step 4: Generate CI workflow
 
-Create `.github/workflows/cd-eks-dev.yaml` in the app repo using the workflow template from `references/ci-writeback-pattern.md`. Use `GITHUB_TOKEN` for the write-back commit — no additional secrets needed.
+Create the CI workflow file in the app repo using the workflow template from the environment's reference file:
+- Dev: `.github/workflows/cd-eks-dev.yaml`
+- Prod: `.github/workflows/cd-eks.yaml`
+
+Use `GITHUB_TOKEN` for the write-back commit — no additional secrets needed.
 
 ### Step 5: Add branch protection bypass
 
-**Always** run the bypass script from `references/ci-writeback-pattern.md` directly. Do not hand this off to the user. Substitute `<org>` and `<app-repo>` from the resolved inputs and execute the script using `bash`.
+**Always** run the bypass script from the environment's reference file directly. Do not hand this off to the user. Substitute `<org>` and `<app-repo>` from the resolved inputs and execute the script using `bash`.
+
+- Dev: bypass on `dev` branch
+- Prod: bypass on `main` branch
 
 ### Step 6: Hand off
 
-Use the handoff template from `references/ci-writeback-pattern.md` to provide the exact commands needed to deploy. Always include:
+Use the handoff template from the environment's reference file to provide the exact commands needed to deploy. Always include:
 
 1. Push manifests to app repo
 2. Register ArgoCD app (`kubectl apply -f argocd-app.yaml`)
