@@ -131,6 +131,57 @@ Changes: [summary]
 Verification: [CLI commands to confirm]
 ```
 
+## Parallel Agent Dispatch
+
+When a user request spans multiple independent domains, dispatch agents in parallel for faster results and cleaner context isolation. Each agent runs the corresponding skill in a fresh context window.
+
+### Agent Inventory
+
+| Agent | Skill | Typical Use |
+|-------|-------|-------------|
+| `run-kubernetes` | `harumi-devops-plugin:kubernetes` | K8s investigation, manifest work |
+| `run-infrastructure` | `harumi-devops-plugin:infrastructure` | Terraform state, IaC changes |
+| `run-observability` | `harumi-devops-plugin:observability` | Metrics, logs, incident investigation |
+| `run-argocd` | `harumi-devops-plugin:argocd` | Sync status, GitOps operations |
+| `run-debug-pod` | `harumi-devops-plugin:debug-pod` | Pod troubleshooting |
+| `run-deploy-app` | `harumi-devops-plugin:deploy-app` | App onboarding |
+
+### Compatibility Matrix
+
+| Agents | Parallel? | Notes |
+|--------|-----------|-------|
+| `run-infrastructure` + `run-kubernetes` | Yes | Independent targets |
+| `run-kubernetes` + `run-observability` | Yes | Common in incident investigation |
+| `run-infrastructure` + `run-observability` | Yes | No shared write targets |
+| `run-argocd` + `run-kubernetes` | Yes | Investigation compatible |
+| `run-deploy-app` + `run-debug-pod` (same app) | No | Sequence: debug first |
+| Any two agents writing to the same resource | No | Always sequential |
+
+### Dispatch Rules
+
+When the user request maps to 2+ compatible skills:
+
+1. **Identify** the relevant agents from the inventory
+2. **Check compatibility** using the matrix — if agents are compatible, dispatch in parallel; if not, sequence them
+3. **Dispatch** compatible agents simultaneously using the Agent tool, passing the specific task and context as inputs to each
+4. **Collect** all results before executing any write operations
+5. **Sequence writes** — execute writes one at a time, respecting declared dependencies
+
+### Error Handling
+
+**Parallel agent failure:**
+1. Preserve and display results from successful agents
+2. Name the failed agent and its error explicitly
+3. Ask the user whether to proceed with partial results or abort
+4. Never silently proceed into write operations with incomplete information
+
+**Write failure:**
+1. Surface the full error
+2. Stop the write sequence
+3. Present a manual recovery handoff command for the user to execute
+
+**No silent retries.** All error recovery is user-gated.
+
 ## Configuration
 
 The active `.devops.yaml` config (loaded at session start) tells you:
