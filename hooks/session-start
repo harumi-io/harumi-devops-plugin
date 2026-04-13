@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook for harumi-devops-plugin
-# Loads the bootstrap skill and merges .devops.yaml config
+# Loads the bootstrap skill, reads harumi.yaml config, and detects drift
 
 set -euo pipefail
 
@@ -10,22 +10,70 @@ PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # --- Read bootstrap skill ---
 using_devops_content=$(cat "${PLUGIN_ROOT}/skills/using-devops/SKILL.md" 2>&1 || echo "Error reading using-devops skill")
 
-# --- Merge .devops.yaml config ---
-# Look for .devops.yaml in the current working directory, fall back to plugin defaults
+# --- Read harumi.yaml config ---
 user_config=""
-default_config_path="${PLUGIN_ROOT}/config/default.devops.yaml"
-repo_config_path="${PWD}/.devops.yaml"
+repo_config_path="${PWD}/harumi.yaml"
 
 if [ -f "$repo_config_path" ]; then
     user_config=$(cat "$repo_config_path" 2>/dev/null || true)
-    config_source="repo (.devops.yaml)"
+    config_source="harumi.yaml"
 else
-    user_config=$(cat "$default_config_path" 2>/dev/null || true)
-    config_source="plugin defaults"
+    config_source="not found"
+    user_config="# No harumi.yaml found. Run the sync-docs skill to generate one."
+fi
+
+# --- Drift detection ---
+drift_summary=""
+last_sync_path="${PWD}/.harumi-last-sync"
+
+if [ -f "$repo_config_path" ] && command -v git &>/dev/null && git rev-parse --git-dir &>/dev/null; then
+    current_head=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+
+    if [ -f "$last_sync_path" ] && [ -n "$current_head" ]; then
+        saved_commit=$(grep '^commit=' "$last_sync_path" 2>/dev/null | cut -d= -f2 || echo "")
+
+        if [ -n "$saved_commit" ] && [ "$saved_commit" != "$current_head" ]; then
+            # Drift detected — summarize changes
+            commit_count=$(git rev-list --count "${saved_commit}..HEAD" 2>/dev/null || echo "?")
+            changed_dirs=$(git diff --name-only "${saved_commit}..HEAD" 2>/dev/null | sed 's|/.*||' | sort -u | tr '\n' ', ' | sed 's/,$//' || echo "unknown")
+
+            # Classify changed files
+            generated_changed=""
+            human_changed=""
+            changed_files=$(git diff --name-only "${saved_commit}..HEAD" 2>/dev/null || echo "")
+
+            while IFS= read -r file; do
+                case "$file" in
+                    docs/architecture/*|harumi.yaml)
+                        generated_changed="${generated_changed:+$generated_changed, }$file"
+                        ;;
+                    README.md|CLAUDE.md|AGENTS.md|docs/runbooks/*)
+                        human_changed="${human_changed:+$human_changed, }$file"
+                        ;;
+                esac
+            done <<< "$changed_files"
+
+            drift_summary="DRIFT DETECTED: ${commit_count} commits since last session. Changes in: ${changed_dirs}."
+            [ -n "$generated_changed" ] && drift_summary="${drift_summary} Auto-update needed: ${generated_changed}."
+            [ -n "$human_changed" ] && drift_summary="${drift_summary} May need review: ${human_changed}."
+            drift_summary="${drift_summary} Run sync-docs skill before proceeding with other work."
+        fi
+
+        # Update last-sync
+        printf 'commit=%s\ntimestamp=%s\n' "$current_head" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$last_sync_path"
+
+    elif [ ! -f "$last_sync_path" ] && [ -n "$current_head" ]; then
+        # First run — write initial state, no drift check
+        printf 'commit=%s\ntimestamp=%s\n' "$current_head" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$last_sync_path"
+    fi
 fi
 
 # --- Build context ---
 config_block="## Active Configuration (source: ${config_source})\n\n\`\`\`yaml\n${user_config}\n\`\`\`"
+
+if [ -n "$drift_summary" ]; then
+    config_block="${config_block}\n\n## Drift Detection\n\n${drift_summary}"
+fi
 
 # --- Escape for JSON ---
 escape_for_json() {
