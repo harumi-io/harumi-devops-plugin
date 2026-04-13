@@ -1,11 +1,26 @@
 ---
 name: using-devops
-description: "Bootstrap skill for harumi-devops-plugin. Injected at session start. Announces available DevOps skills, loads repo config, defines trigger rules, and enforces safety rules for infrastructure operations."
+description: "Bootstrap skill for harumi-devops-plugin. Injected at session start. Announces available DevOps skills, loads harumi.yaml config, defines trigger rules, enforces safety rules, and detects drift."
 ---
 
 # DevOps Plugin
 
-You have the **harumi-devops-plugin** installed. This plugin provides DevOps-oriented skills for infrastructure, Kubernetes, CI/CD, and cloud operations.
+You have the **harumi-devops-plugin** installed. This plugin provides DevOps skills for harumi's infrastructure and Kubernetes operations.
+
+## Managed Repositories
+
+This plugin manages two repositories:
+
+| Repo | Purpose |
+|------|---------|
+| `harumi-io/infrastructure` | Terraform IaC (AWS) — VPC, ECS, EKS, RDS, IAM, DNS |
+| `harumi-io/harumi-k8s` | Kubernetes manifests, ArgoCD apps, Helm values, Grafana dashboards |
+
+Read `harumi.yaml` (injected at session start) for cluster names, contexts, endpoints, and naming conventions.
+
+## Drift Detection
+
+If the drift detection section below reports drift, invoke `harumi-devops-plugin:sync-docs` **before** proceeding with any other work. This ensures documentation is up to date before making further changes.
 
 ## Available Skills
 
@@ -13,8 +28,8 @@ Use the Skill tool to invoke these when triggered:
 
 | Skill | Trigger | Use When |
 |-------|---------|----------|
-| `harumi-devops-plugin:infrastructure` | `.tf` files, Terraform, AWS/GCP/Azure infra | Creating, modifying, or reviewing Terraform/IaC configurations |
-| `harumi-devops-plugin:setup-devops-config` | User asks to create/set up `.devops.yaml`; no config exists | Setting up the plugin for a new repo |
+| `harumi-devops-plugin:infrastructure` | `.tf` files, Terraform, AWS infra | Creating, modifying, or reviewing Terraform/IaC configurations |
+| `harumi-devops-plugin:sync-docs` | Drift detected, user asks to sync docs | Updating repo documentation to match current state |
 | `harumi-devops-plugin:kubernetes` | K8s manifests, Helm, kubectl, pod issues, RBAC | Working with Kubernetes resources, debugging, manifest authoring |
 | `harumi-devops-plugin:argocd` | ArgoCD Applications, sync issues, GitOps deployment | Managing ArgoCD apps, app-of-apps, onboarding services |
 | `harumi-devops-plugin:observability` | Monitoring, alerting, dashboards, PromQL/LogQL, incident investigation | Query authoring, alert rules, Grafana dashboards, active incident debugging |
@@ -38,24 +53,19 @@ Quick-action skills for daily DevOps operations. Use the Skill tool to invoke:
 | `harumi-devops-plugin:debug-pod` | Troubleshoot a failing or misbehaving pod |
 | `harumi-devops-plugin:scale-deployment` | Scale deployment replicas up or down |
 
-**Future skills** (not yet available):
-- `cicd` — CI/CD pipeline configs, deployment workflows
-- `cost-optimization` — Resource sizing, cost analysis
-- `containers` — Dockerfiles, image builds, registries
-
 ## Trigger Rules
+
+Invoke `harumi-devops-plugin:sync-docs` when:
+- Drift was detected at session start (see drift detection section above)
+- User asks to sync, update, or refresh documentation
+- After user executes a terraform apply or kubectl apply handoff
 
 Invoke `harumi-devops-plugin:infrastructure` when you encounter ANY of:
 - `.tf` files or Terraform discussions
-- AWS, GCP, or Azure infrastructure tasks
+- AWS infrastructure tasks
 - IaC changes, module creation, state management
 - Infrastructure migrations or zero-downtime changes
 - Cost or security review of cloud resources
-
-Invoke `harumi-devops-plugin:setup-devops-config` when you encounter ANY of:
-- User asks to create, generate, or set up `.devops.yaml`
-- User says "configure the plugin" or "set up devops config"
-- No `.devops.yaml` exists and the user expresses intent to configure or set up the plugin
 
 Invoke `harumi-devops-plugin:create-iam-user` when:
 - User wants to add, create, or onboard a new AWS user (developer, admin, contributor)
@@ -113,6 +123,21 @@ Invoke `harumi-devops-plugin:observability` when:
 - User says "investigate", "debug", "what's wrong with", "why is X slow/down"
 - User references monitoring, alerting, SLOs, SLIs, error rates
 
+## Cluster Read-Access Rules
+
+Skills use locally configured kubectl contexts for **read-only** cluster access.
+
+**Allowed commands:**
+- `kubectl get`, `kubectl describe`, `kubectl logs`, `kubectl top`
+- `argocd app get`, `argocd app list`
+- `helm list`, `helm get values`
+- `curl` against observability endpoints (from `harumi.yaml` observability.endpoints)
+
+**Forbidden commands (require handoff to user):**
+- `kubectl apply`, `kubectl delete`, `kubectl edit`, `kubectl patch`, `kubectl create`
+- `helm install`, `helm upgrade`, `helm uninstall`
+- `argocd app sync`, `argocd app delete`
+
 ## Universal Safety Rules (NON-NEGOTIABLE)
 
 These apply to ALL DevOps skills:
@@ -120,7 +145,7 @@ These apply to ALL DevOps skills:
 1. **Never run `terraform apply` or `terraform destroy`** — Always provide a handoff with the exact command for the user to execute
 2. **Never `kubectl delete` or any write operation without explicit user confirmation** — this applies to ALL environments (production, staging, development). No exceptions.
 3. **Never push images to production registries without confirmation**
-4. **Always verify current state before making changes** — Use CLI commands (aws, gcloud, az, kubectl) to confirm resource existence and configuration
+4. **Always verify current state before making changes** — Use `aws` CLI and `kubectl` to confirm resource existence and configuration
 5. **Always present the handoff pattern for destructive actions:**
 
 ```
@@ -184,14 +209,12 @@ When the user request maps to 2+ compatible skills:
 
 ## Configuration
 
-The active `.devops.yaml` config (loaded at session start) tells you:
-- **Cloud provider** — which CLI commands to use (aws, gcloud, az)
-- **Terraform settings** — version, state backend, var file
+The active `harumi.yaml` config (loaded at session start) tells you:
+- **AWS account** — account ID, region, alias
+- **Terraform settings** — version, state backend, state bucket, var file, module paths
+- **Clusters** — names, contexts, environments, domains, registries
+- **ArgoCD** — gitops repo, app-of-apps paths
+- **Observability endpoints** — Prometheus, Grafana, Loki, Tempo, Alertmanager URLs
 - **Naming pattern** — how resources are named
-- **Stack details** — K8s tool, CI/CD platform, observability stack, container runtime
 
-Read config values to adapt your guidance to the user's specific stack.
-
-## Relationship to Superpowers
-
-This plugin is **domain-oriented** (how to do DevOps). Superpowers is **process-oriented** (how to work: TDD, debugging, planning). They complement each other. Use superpowers skills for workflow (brainstorming, planning, debugging) and devops skills for domain knowledge (Terraform patterns, cloud architecture, security).
+Read config values to adapt your guidance to the specific context.
