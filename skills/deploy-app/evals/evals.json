@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Deploy the 'payments' app to prod. During the preflight checks, the Secrets Manager secret 'harumi/payments/prod' does not exist — aws secretsmanager get-secret-value returns a ResourceNotFoundException.",
+      "prompt": "Deploy the 'payments' app to prod. App port: 8000. Health check path: /api/health. App repo: harumi-io/payments. Target cluster: eks-prod. During the preflight checks, the Secrets Manager secret 'harumi/payments/prod' does not exist — aws secretsmanager get-secret-value returns a ResourceNotFoundException.",
       "expected_output": "Runs the preflight checks, detects that the Secrets Manager secret is missing, reports the failure clearly, and stops before generating any manifests. Provides the exact aws secretsmanager create-secret command the user must run to resolve the blocker.",
       "files": [],
       "expectations": [
@@ -16,7 +16,7 @@
     },
     {
       "id": 2,
-      "prompt": "Deploy the 'frontend' app to prod. The Secrets Manager secret 'harumi/frontend/prod' exists but when we list its keys with jq 'keys', the output does not include NEXT_PUBLIC_SUPABASE_ANON_KEY. The app's ExternalSecret references that key.",
+      "prompt": "Deploy the 'frontend' app to prod. App port: 3000. Health check path: /health. App repo: harumi-io/frontend. Target cluster: eks-prod. The Secrets Manager secret 'harumi/frontend/prod' exists but when we list its keys with jq 'keys', the output does not include NEXT_PUBLIC_SUPABASE_ANON_KEY. The app's ExternalSecret references that key.",
       "expected_output": "Runs the preflight checks, detects that the required key NEXT_PUBLIC_SUPABASE_ANON_KEY is absent from the secret, reports the missing key clearly, and stops before generating manifests. Provides the exact aws secretsmanager put-secret-value or update-secret command needed to add the missing key.",
       "files": [],
       "expectations": [
@@ -29,7 +29,7 @@
     },
     {
       "id": 3,
-      "prompt": "Deploy the 'harumi-api' app to prod. During preflight, aws ecr describe-repositories returns a RepositoryNotFoundException for 'harumi-harumi-api'.",
+      "prompt": "Deploy the 'harumi-api' app to prod. App port: 8080. Health check path: /api/health. App repo: harumi-io/harumi-api. Target cluster: eks-prod. During preflight, aws ecr describe-repositories returns a RepositoryNotFoundException for 'harumi-harumi-api'.",
       "expected_output": "Runs the preflight checks, detects the missing ECR repository, reports the failure clearly, and stops before generating any manifests. Provides the exact aws ecr create-repository command the user must run to resolve the blocker.",
       "files": [],
       "expectations": [
@@ -42,7 +42,7 @@
     },
     {
       "id": 4,
-      "prompt": "Deploy the 'frontend' app to prod using the isolated-prod-test rollout shape. The deployment shape is isolated-prod-test, targeting branch 'feature/payments-v2'.",
+      "prompt": "Deploy the 'frontend' app to prod. App port: 3000. Health check path: /health. App repo: harumi-io/frontend. Target cluster: eks-prod. Deployment shape: isolated-prod-test. ArgoCD app filename: argocd-app-prod.yaml. CI workflow filename: cd-eks-prod.yaml. Initial targetRevision: feature/payments-v2.",
       "expected_output": "Runs Step 2 cluster inspection (argocd app list, kubectl get namespace) and all Step 3 preflight checks before generating any manifests. Only after preflight passes does it generate argocd-app-prod.yaml at the repo root (not argocd-app.yaml) with targetRevision set to the feature branch, .github/workflows/cd-eks-prod.yaml (not cd-eks.yaml), destination.namespace 'frontend-prod-test', and all deploy/ manifests using 'frontend-prod-test' as the namespace.",
       "files": [],
       "expectations": [
