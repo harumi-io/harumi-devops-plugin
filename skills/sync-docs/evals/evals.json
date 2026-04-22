@@ -30,6 +30,22 @@
         "Does NOT invent Kubernetes cluster contexts, ingress domains, namespace lists, or workload state",
         "Summary shows AWS as available/live and Kubernetes as unavailable, with separate per-source reporting"
       ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run sync-docs. AWS CLI returns 'Unable to locate credentials' \u2014 no AWS access. kubectl is available: kubectl config get-contexts shows context 'harumi-prod-eks', and kubectl get ingress --all-namespaces returns ingress domain 'app.harumi.io'. The checked-in harumi.yaml has context 'eks-prod' and domain 'harumi.io'. Sync what you can.",
+      "expected_output": "Uses live Kubernetes data for Kubernetes-sourced fields (updates context name and ingress domain in harumi.yaml). Reports that live AWS drift could not be verified and falls back to repo data for AWS-sourced fields (account ID, region, ECR registry). Does NOT invent AWS resource attributes. Summary shows Kubernetes as live and AWS as unavailable/repo-only, with per-source reporting.",
+      "files": [],
+      "expectations": [
+        "Does NOT fail or stop because AWS credentials are unavailable \u2014 degrades gracefully for the AWS surface",
+        "Explicitly reports 'live drift could not be verified for AWS' (or equivalent) in the response or summary",
+        "Uses live Kubernetes state (context 'harumi-prod-eks', ingress domain 'app.harumi.io') to update Kubernetes-sourced fields in harumi.yaml",
+        "Identifies Kubernetes-side drift: cluster context changed from 'eks-prod' to 'harumi-prod-eks'",
+        "Identifies Kubernetes-side drift: ingress domain changed from 'harumi.io' to 'app.harumi.io'",
+        "Falls back to repo data (Terraform files) for AWS-sourced fields such as account ID, region, and ECR registry URI",
+        "Does NOT invent AWS account ID, region, or ECR registry values",
+        "Summary shows Kubernetes as available/live and AWS as unavailable, with separate per-source reporting"
+      ]
     }
   ]
 }

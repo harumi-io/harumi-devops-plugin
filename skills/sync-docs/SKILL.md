@@ -84,8 +84,11 @@ Query each live source independently. A failure in one does not block the other.
 Run these commands when the `aws` CLI is present and credentials are available:
 
 ```bash
-# Account identity — confirms account ID (not region; use aws configure get region for that)
+# Account identity — confirms account ID
 aws sts get-caller-identity
+
+# Active region — reads the region configured for the current AWS CLI profile
+aws configure get region
 
 # EKS clusters — live cluster names, endpoints, and Kubernetes versions
 aws eks list-clusters --region <region>
@@ -148,7 +151,7 @@ For each generated target:
 
 **`harumi.yaml` is a generated projection.** It must be rewritten whenever any of the following drift from the checked-in file:
 - Terraform outputs (e.g. cluster endpoint, state bucket)
-- Live AWS resources: account ID, region, EKS cluster names, ECR registry URIs (from Step 2a)
+- Live AWS resources: account ID, region (`aws configure get region`), EKS cluster names, ECR registry URIs (from Step 2a)
 - Live Kubernetes cluster contexts or ingress domains (from Step 2b)
 - ArgoCD gitops repo or app-of-apps paths
 
