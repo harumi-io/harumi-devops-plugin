@@ -27,23 +27,32 @@ else
     user_config="# No repo config found. Create harumi.yaml or .devops.yaml."
 fi
 
-# --- Kube-context validation ---
-# kube_validation holds the full validation result surfaced in session context.
-# It is always set when a config is loaded so downstream skills know the status.
-kube_validation=""
+# --- Prerequisites validation ---
+# Collects all prerequisite check results for the session context.
+# Lines starting with "⚠ BLOCKING:" mean work must stop until the user resolves
+# the issue. Informational lines are neutral state reports.
+prereq_lines=""
+append_prereq() {
+    prereq_lines="${prereq_lines:+${prereq_lines}
+}$1"
+}
+
+# Check 1: repo config present
+if [ "$config_source" = "not found" ]; then
+    append_prereq "⚠ BLOCKING: No repo config found. Create harumi.yaml or .devops.yaml before proceeding with any DevOps operations."
+fi
+
+# Check 2: kube-context prerequisites (only when a config was loaded)
 if [ "$config_source" != "not found" ] && [ -n "$user_config" ]; then
     if ! command -v kubectl &>/dev/null; then
-        kube_validation="Kube-context validation skipped: kubectl not found in PATH."
+        append_prereq "⚠ BLOCKING: kubectl not found in PATH. All cluster operations require kubectl. Install kubectl or clarify access with the user before proceeding."
     else
-        # Capture exit code separately — a non-zero exit means kubeconfig is
-        # unavailable or unreadable, which is a blocking prerequisite failure,
-        # not a normal "context missing" result.
-        # Capture exit code without letting set -e abort the script on failure.
+        # Use || capture so set -euo pipefail does not abort on a failing kubectl.
         kubectl_exit=0
         available_contexts=$(kubectl config get-contexts -o name 2>/dev/null) || kubectl_exit=$?
 
         if [ $kubectl_exit -ne 0 ]; then
-            kube_validation="⚠ BLOCKING: kubectl exists but kubeconfig is unavailable or unreadable (kubectl config get-contexts exited ${kubectl_exit}). All cluster operations are blocked. Clarify kubeconfig access with the user before proceeding."
+            append_prereq "⚠ BLOCKING: kubeconfig is unavailable or unreadable (kubectl config get-contexts exited ${kubectl_exit}). All cluster operations are blocked. Clarify kubeconfig access with the user before proceeding."
         else
             # Extract context values resilient to common YAML shapes:
             #   context: eks-prod
@@ -58,23 +67,21 @@ if [ "$config_source" != "not found" ] && [ -n "$user_config" ]; then
                 | sed "s/^['\"]//; s/['\"]$//" \
                 || true)
 
-            missing=""
+            missing_count=0
             while IFS= read -r ctx; do
                 [ -z "$ctx" ] && continue
                 if ! printf '%s\n' "$available_contexts" | grep -qxF "$ctx"; then
-                    missing="${missing:+${missing}
-}- Missing kube context: ${ctx}"
+                    append_prereq "⚠ BLOCKING: Missing kube context: ${ctx}. Declared in repo config but not configured locally. Add this context to your kubeconfig or clarify with the user."
+                    missing_count=$((missing_count + 1))
                 fi
             done <<< "$configured_contexts"
 
-            if [ -n "$missing" ]; then
-                kube_validation="$missing"
-            elif [ -n "$configured_contexts" ]; then
-                kube_validation="All configured contexts are available locally."
-            else
-                kube_validation="No contexts configured in repo config."
+            if [ "$missing_count" -eq 0 ] && [ -n "$configured_contexts" ]; then
+                append_prereq "All configured Kubernetes contexts are available locally."
+            elif [ -z "$configured_contexts" ]; then
+                append_prereq "No Kubernetes contexts declared in repo config."
             fi
-        fi  # end: kubectl_exit check
+        fi
     fi
 fi
 
@@ -127,8 +134,8 @@ fi
 # --- Build context ---
 config_block="## Active Configuration (source: ${config_source})\n\n\`\`\`yaml\n${user_config}\n\`\`\`"
 
-if [ -n "$kube_validation" ]; then
-    config_block="${config_block}\n\n## Kube-Context Validation\n\n${kube_validation}"
+if [ -n "$prereq_lines" ]; then
+    config_block="${config_block}\n\n## Prerequisites\n\n${prereq_lines}"
 fi
 
 if [ -n "$drift_summary" ]; then

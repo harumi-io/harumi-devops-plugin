@@ -16,9 +16,13 @@ This plugin manages two repositories:
 | `harumi-io/infrastructure` | Terraform IaC (AWS) — VPC, ECS, EKS, RDS, IAM, DNS |
 | `harumi-io/harumi-k8s` | Kubernetes manifests, ArgoCD apps, Helm values, Grafana dashboards |
 
-Read the active repo config (injected at session start) for cluster names, contexts, endpoints, and naming conventions. The hook loads `harumi.yaml` when present, otherwise falls back to the legacy `.devops.yaml`. Trust the reported **config source** and any **kube-context validation warnings** in the session context over stale docs or examples.
+Read the active repo config (injected at session start) for cluster names, contexts, endpoints, and naming conventions. The hook loads `harumi.yaml` when present, otherwise falls back to the legacy `.devops.yaml`. Trust the reported **config source** and any **prerequisite warnings** in the session context over stale docs or examples.
 
-If the session context contains a line starting with `⚠ BLOCKING:`, **stop all work immediately** and ask the user to resolve the prerequisite before continuing. Do not attempt cluster operations, context lookups, or any step that depends on the blocked resource.
+If the session context contains a `## Prerequisites` section with any line starting with `⚠ BLOCKING:`, **stop all work immediately** and ask the user to resolve that prerequisite before continuing. Do not attempt cluster operations, resource lookups, or any step that depends on the blocked resource. The following conditions are always blocking:
+- No repo config found (`harumi.yaml` or `.devops.yaml` absent)
+- `kubectl` not found in PATH when the repo config declares cluster contexts
+- Kubeconfig unavailable or unreadable
+- A configured Kubernetes context is not present in the local kubeconfig
 
 ## Drift Detection
 
