@@ -12,15 +12,18 @@ Keep repo documentation accurate by reading actual code, infrastructure state, a
 
 ## Source of Truth
 
-Apply this priority order when determining the authoritative value for any field:
+Each live source is queried **independently**. Partial reachability is normal — AWS may be reachable when Kubernetes is not, or vice versa. Apply this logic per value, not per session:
 
-1. **Live AWS and Kubernetes state** (highest priority) — when reachable, live state is the source of truth for *deployed reality*. Terraform outputs, AWS resource attributes, `kubectl` query results, and cluster contexts override anything stored in the repo.
-2. **Repository files** — Terraform source, K8s manifests, and CI/CD workflows are the source of truth for *intended configuration*. Use these when live access is unavailable, or to detect divergence between intent and reality.
-3. **Nothing invented** — if a value cannot be determined from live state or the repo, omit it and note the gap. Never fabricate cloud or cluster state.
+1. **Live state per source** (highest priority per surface)
+   - **AWS**: when the `aws` CLI is available and credentials are valid, AWS API responses are the source of truth for account metadata, cluster names, registry URLs, and DNS/load-balancer facts.
+   - **Kubernetes**: when `kubectl` is available and a context is configured, live cluster queries are the source of truth for context names, namespaces, ingress domains, and workload state.
+   - Each source is authoritative only for the values it owns; a reachable source does not substitute for an unreachable one.
+2. **Repository files** — Terraform source, K8s manifests, and CI/CD workflows are the source of truth for *intended configuration*. Use repo data for any surface whose live source is unavailable, or to detect divergence between intent and reality.
+3. **Nothing invented** — if a value cannot be determined from either live state or the repo, omit it and note the gap. Never fabricate cloud or cluster state.
 
-**Drift** means generated artifacts (e.g. `harumi.yaml`, architecture docs) must be refreshed to reflect observed reality. For human-authored docs, mismatches between doc claims and observed reality must be proposed to the user — never silently applied.
+**Drift** means generated artifacts (e.g. `harumi.yaml`, architecture docs) must be refreshed to reflect observed reality. For human-authored docs, mismatches must be proposed to the user — never silently applied.
 
-**When live access is unavailable** — fall back to repo-only sync, explicitly report "live drift could not be verified", and do not invent cloud or cluster state.
+**When a live source is unavailable** — fall back to repo data for that surface, report "live drift could not be verified for [AWS / Kubernetes]", and continue. Missing access is reported per source, not as an all-or-nothing failure.
 
 ## Targets
 
@@ -72,7 +75,41 @@ Read the codebase to understand current state:
 - **CI/CD**: Read `.github/workflows/*.yml`. Extract pipeline structure, deployment targets.
 - **Config**: Detect the active config file: prefer `harumi.yaml` if it exists; fall back to `.devops.yaml`. Read whichever is present and note any values that may need updating.
 
-### Step 2: Query Live Cluster State (Read-Only)
+### Step 2: Query Live State (Read-Only)
+
+Query each live source independently. A failure in one does not block the other.
+
+#### Step 2a: Query Live AWS State
+
+Run these commands when the `aws` CLI is present and credentials are available:
+
+```bash
+# Account identity — confirms account ID and region
+aws sts get-caller-identity
+
+# EKS clusters — live cluster names, endpoints, and Kubernetes versions
+aws eks list-clusters --region <region>
+aws eks describe-cluster --name <cluster-name> --region <region> \
+  --query 'cluster.{name:name,endpoint:endpoint,version:version,status:status}'
+
+# ECR registries — live registry URLs and repository names
+aws ecr describe-repositories --region <region> \
+  --query 'repositories[*].{name:repositoryName,uri:repositoryUri}'
+
+# Route53 hosted zones — live domain names attached to this account
+aws route53 list-hosted-zones --query 'HostedZones[*].{name:Name,id:Id}'
+
+# ELB/ALB — load balancer DNS names (useful for domain and ingress verification)
+aws elbv2 describe-load-balancers --region <region> \
+  --query 'LoadBalancers[*].{name:LoadBalancerName,dns:DNSName,state:State.Code}'
+```
+
+**If the `aws` CLI is unavailable or credentials are missing:**
+- Log: "Live AWS access unavailable — live drift could not be verified for AWS. Falling back to repo data for AWS-sourced fields (account ID, EKS cluster names, ECR registries, domains)."
+- Continue — do NOT fail or stop.
+- Do NOT invent AWS resource attributes.
+
+#### Step 2b: Query Live Kubernetes State
 
 Use locally configured kubectl contexts for read-only access. Run these commands for each cluster context defined in the active repo config:
 
@@ -94,10 +131,9 @@ kubectl get pods -n monitoring --context <context> 2>/dev/null || echo "monitori
 ```
 
 **If kubectl is unavailable or contexts are not configured:**
-- Log: "Live cluster access unavailable — proceeding with repo-only data. Live drift could not be verified. Cluster-derived docs (clusters.md, services.md, networking.md) will be incomplete."
-- Continue with Steps 3 and 4 using only repo-scanned data.
-- Do NOT fail or stop.
-- Do NOT invent cloud or cluster state — omit fields that cannot be determined and note the gap.
+- Log: "Live Kubernetes access unavailable — live drift could not be verified for Kubernetes. Falling back to repo data for Kubernetes-sourced fields (cluster contexts, ingress domains, workload state)."
+- Continue — do NOT fail or stop.
+- Do NOT invent cluster contexts, domain names, or workload state.
 
 **NEVER run write commands.** Allowed: `get`, `describe`, `logs`, `top`. Forbidden: `apply`, `delete`, `edit`, `patch`, `create`.
 
@@ -111,12 +147,15 @@ For each generated target:
 4. If no changes, skip
 
 **`harumi.yaml` is a generated projection.** It must be rewritten whenever any of the following drift from the checked-in file:
-- Terraform outputs (e.g. cluster endpoint, registry URL, state bucket)
-- Live AWS resources (e.g. account ID, region, EKS cluster names, ECR registries)
-- Live Kubernetes cluster contexts or domains (from `kubectl config get-contexts` or ingress queries)
+- Terraform outputs (e.g. cluster endpoint, state bucket)
+- Live AWS resources: account ID, region, EKS cluster names, ECR registry URIs (from Step 2a)
+- Live Kubernetes cluster contexts or ingress domains (from Step 2b)
 - ArgoCD gitops repo or app-of-apps paths
 
-When drift is detected in `harumi.yaml`, regenerate it from the best available source — live AWS/Kubernetes state if reachable, otherwise repo data — and write it silently as part of the generated-doc update. Note in the Step 5 summary which source was used (live or repo-only).
+When regenerating `harumi.yaml`, use the best available reading per field:
+- Fields sourced from AWS: use live AWS data if Step 2a succeeded; otherwise use repo data and note "AWS: repo-only".
+- Fields sourced from Kubernetes: use live cluster data if Step 2b succeeded; otherwise use repo data and note "Kubernetes: repo-only".
+- Record which source was used for each surface in the Step 5 summary.
 
 After all generated docs are updated, write the current git HEAD to `.harumi-last-sync`:
 
@@ -138,8 +177,9 @@ For each human-authored target:
 [filename] line [N]: stale claim detected
 
   Stale claim:  "[current text in the doc]"
-  Live fact:    "[observed value from AWS/Kubernetes]"
-                (or "repo fact: [value from Terraform/manifests]" when live access is unavailable)
+  Live fact:    "[observed value from AWS or Kubernetes]"
+                (or "repo fact ([AWS/Kubernetes]: repo-only): [value from Terraform/manifests]"
+                 when that source's live access is unavailable)
   Proposed edit: [show the diff]
 
 Apply? (yes / skip)
@@ -161,9 +201,11 @@ Updated: [list of generated files that changed]
 Unchanged: [list of generated files with no drift]
 Proposed: [N] edits to [human-authored files] ([M] applied, [K] skipped)
 Skipped: [human-authored files with no drift detected]
-Cluster access: [available / unavailable — live drift could not be verified]
-harumi.yaml source: [live AWS+Kubernetes / repo-only]
+Live access: AWS=[available/unavailable], Kubernetes=[available/unavailable]
+harumi.yaml source: AWS=[live/repo-only], Kubernetes=[live/repo-only]
 ```
+
+When a source is unavailable, append: "live drift could not be verified for [AWS / Kubernetes]".
 
 ## What NOT to Do
 

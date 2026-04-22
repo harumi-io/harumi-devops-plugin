@@ -3,30 +3,32 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Run sync-docs. Live kubectl shows context 'harumi-prod-eks' with domain 'app.harumi.io', but the checked-in harumi.yaml has context 'eks-prod' and domain 'harumi.io'. AWS CLI confirms the EKS cluster endpoint has changed. Update the repo.",
-      "expected_output": "Detects that live Kubernetes cluster context and domain differ from the checked-in harumi.yaml. Treats live state as the source of truth. Regenerates harumi.yaml with the values observed from live AWS and Kubernetes. Writes the file silently as a generated artifact. Summary reports 'harumi.yaml source: live AWS+Kubernetes'.",
+      "prompt": "Run sync-docs. Live kubectl shows context 'harumi-prod-eks' with ingress domain 'app.harumi.io'. Live AWS shows: aws sts get-caller-identity returns account 987654321098, aws eks describe-cluster returns endpoint 'https://NEWENDPOINT.gr7.us-east-1.eks.amazonaws.com', and aws ecr describe-repositories returns registry URI '987654321098.dkr.ecr.us-east-1.amazonaws.com'. The checked-in harumi.yaml has context 'eks-prod', domain 'harumi.io', account '123456789012', and registry '123456789012.dkr.ecr.us-east-1.amazonaws.com'. Update the repo.",
+      "expected_output": "Detects drift across both AWS-sourced fields (account ID, ECR registry URI, EKS endpoint) and Kubernetes-sourced fields (context name, ingress domain). Treats live AWS and live Kubernetes state as the source of truth for their respective surfaces. Regenerates harumi.yaml using the live-observed values from both sources. Writes the file silently. Summary shows both sources as live.",
       "files": [],
       "expectations": [
-        "Identifies the drift between live Kubernetes state (context 'harumi-prod-eks', domain 'app.harumi.io') and the checked-in harumi.yaml values",
-        "Treats live AWS and Kubernetes state as the source of truth for deployed reality",
-        "Regenerates harumi.yaml using the live-observed context name and domain",
+        "Identifies AWS-side drift: account ID changed from '123456789012' to '987654321098'",
+        "Identifies AWS-side drift: ECR registry URI changed to '987654321098.dkr.ecr.us-east-1.amazonaws.com'",
+        "Identifies Kubernetes-side drift: cluster context changed from 'eks-prod' to 'harumi-prod-eks'",
+        "Identifies Kubernetes-side drift: ingress domain changed from 'harumi.io' to 'app.harumi.io'",
+        "Regenerates harumi.yaml using live AWS values (new account ID, new registry URI) and live Kubernetes values (new context, new domain)",
         "Writes harumi.yaml silently without prompting the user (it is a generated artifact)",
-        "Does NOT keep the stale 'eks-prod' context or 'harumi.io' domain in the regenerated file",
-        "Summary includes 'harumi.yaml source: live AWS+Kubernetes' or equivalent wording indicating live state was used"
+        "Does NOT retain any of the stale values from the original checked-in harumi.yaml",
+        "Summary shows 'AWS=[live]' and 'Kubernetes=[live]' (or equivalent wording) for the harumi.yaml source line"
       ]
     },
     {
       "id": 2,
-      "prompt": "Run sync-docs. kubectl is not installed and AWS CLI returns 'Unable to locate credentials'. Sync what you can.",
-      "expected_output": "Detects that live cluster and AWS access are unavailable. Falls back to repo-only data (Terraform files, K8s manifests, CI/CD workflows). Explicitly reports that live drift could not be verified. Does NOT invent cloud or cluster state. Summary states cluster access as unavailable and notes that live drift could not be verified.",
+      "prompt": "Run sync-docs. AWS CLI is available: aws sts get-caller-identity returns account '123456789012', aws eks list-clusters returns 'eks-prod', aws ecr describe-repositories returns registry '123456789012.dkr.ecr.us-east-1.amazonaws.com'. However, kubectl is not installed. Sync what you can.",
+      "expected_output": "Uses live AWS data for AWS-sourced fields. Reports that live Kubernetes drift could not be verified (kubectl unavailable) and falls back to repo data for Kubernetes-sourced fields. Does NOT invent cluster contexts, ingress domains, or namespace state. Summary shows AWS as live and Kubernetes as unavailable/repo-only, with an explicit note that live drift could not be verified for Kubernetes.",
       "files": [],
       "expectations": [
-        "Detects that kubectl is unavailable and AWS CLI has no credentials",
-        "Does NOT fail or stop — degrades gracefully to repo-only sync",
-        "Explicitly reports 'live drift could not be verified' (or equivalent wording) in the response or summary",
-        "Does NOT invent AWS resource attributes, cluster contexts, domains, or registry URLs",
-        "Proceeds with repo-scanned data (Terraform files, K8s manifests) as the fallback source",
-        "Summary shows cluster access as unavailable and notes the live-drift limitation"
+        "Uses live AWS state (account ID, EKS cluster name, ECR registry URI) for AWS-sourced fields in harumi.yaml",
+        "Does NOT fail or stop because kubectl is unavailable — degrades gracefully for the Kubernetes surface",
+        "Explicitly reports 'live drift could not be verified for Kubernetes' (or equivalent) in the response or summary",
+        "Falls back to repo data (Terraform files, K8s manifests) for Kubernetes-sourced fields such as cluster context names and ingress domains",
+        "Does NOT invent Kubernetes cluster contexts, ingress domains, namespace lists, or workload state",
+        "Summary shows AWS as available/live and Kubernetes as unavailable, with separate per-source reporting"
       ]
     }
   ]

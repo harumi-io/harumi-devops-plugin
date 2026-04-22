@@ -191,12 +191,13 @@ Agents are thin wrappers that run a skill in a fresh, isolated context. They ena
 
 ## Source of Truth for Generated Files
 
-Generated files such as `harumi.yaml` and the architecture docs (`docs/architecture/*.md`) are always refreshed from the **best available source of truth**:
+Generated files such as `harumi.yaml` and the architecture docs (`docs/architecture/*.md`) are always refreshed from the **best available source per surface**:
 
-- **Live AWS and Kubernetes state wins when reachable** — Terraform outputs, AWS resource attributes, and `kubectl` query results override anything stored in the repo. `harumi.yaml` is a generated projection of real infrastructure and must be rewritten whenever cluster contexts, domains, registries, or other live values drift from the checked-in file.
-- **Repo data is used when live access is unavailable** — Terraform source, K8s manifests, and CI/CD workflows serve as the fallback. When this path is taken, the sync summary explicitly states "live drift could not be verified" and no cloud or cluster state is invented.
+- **Live AWS state** — when the `aws` CLI and credentials are present, AWS API responses (account metadata, EKS cluster names, ECR registry URIs, Route53 domains) are used for AWS-sourced fields. `harumi.yaml` is a generated projection of real infrastructure and must be rewritten whenever these live values drift from the checked-in file.
+- **Live Kubernetes state** — when `kubectl` contexts are configured, cluster queries (context names, ingress domains, namespace inventory) are used for Kubernetes-sourced fields.
+- **Each source falls back independently** — if AWS is reachable but Kubernetes is not (or vice versa), live data is used where available and repo data fills the gap for the unreachable surface. The sync summary explicitly reports "live drift could not be verified for [AWS / Kubernetes]" per source; no cloud or cluster state is ever invented.
 
-Human-authored files (`README.md`, `CLAUDE.md`, `AGENTS.md`, runbooks) are never modified without showing the stale claim, the live or repo fact, the proposed edit, and receiving explicit user approval.
+Human-authored files (`README.md`, `CLAUDE.md`, `AGENTS.md`, runbooks) are never modified without showing the stale claim, the live or repo fact (labeled by source), the proposed edit, and receiving explicit user approval.
 
 ## Managed Repositories
 
