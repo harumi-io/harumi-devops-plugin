@@ -49,7 +49,7 @@
         "Runs argocd app list to check for an existing conflicting ArgoCD application before generating manifests (Step 2)",
         "Runs kubectl get namespace frontend-prod-test to check whether the namespace already exists (Step 2)",
         "Runs aws secretsmanager get-secret-value for the secret path harumi/frontend/prod as a preflight check (Step 3)",
-        "Runs aws ecr describe-repositories for the ECR repository as a preflight check (Step 3)",
+        "Runs aws ecr describe-repositories --repository-names harumi-frontend for the prod ECR repository as a preflight check (Step 3)",
         "Does NOT generate any manifests until all preflight checks pass",
         "Creates argocd-app-prod.yaml at the repo root, not argocd-app.yaml",
         "Sets targetRevision to 'feature/payments-v2' in argocd-app-prod.yaml",

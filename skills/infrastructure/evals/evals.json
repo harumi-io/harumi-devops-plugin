@@ -47,7 +47,7 @@
       "files": [],
       "expectations": [
         "Separates resources in the plan into in-scope (module.s3_artifacts) and out-of-scope (module.vpc, module.rds)",
-        "Runs git diff origin/main to confirm this branch did not touch the out-of-scope modules' source files",
+        "Runs a path-scoped git diff, e.g. git diff origin/main -- [path/to/vpc or rds module file], to confirm this branch did not touch the out-of-scope modules' source files",
         "Runs a cloud CLI command (e.g. aws ec2 describe-vpcs or aws rds describe-db-instances) to verify the drift pre-dates this branch",
         "Presents the unrelated drift with a warning block and recommends a separate targeted plan for operator review, e.g.: terraform plan -var-file=prod.tfvars -target='module.vpc'",
         "Uses the quoted -target='module.s3_artifacts' flag form (as documented in the skill workflow step 7) in the targeted plan command",
