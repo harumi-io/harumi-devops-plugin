@@ -69,6 +69,72 @@ argocd app get <app-name>
 kubectl get pods -n <namespace> --context <context>
 ```
 
+## Rollout Lifecycle — targetRevision
+
+When rolling out a new version of an app, use `targetRevision` to gate traffic at the GitOps layer:
+
+### Step 1 — Point at a feature branch for validation
+
+Edit the ArgoCD Application manifest and set `targetRevision` to the feature branch:
+
+```yaml
+spec:
+  source:
+    repoURL: https://github.com/harumi-io/<app-repo>
+    targetRevision: feature/<branch-name>   # temporary; reverts to main after validation
+    path: deploy-dev
+```
+
+Provide this as a handoff — do not apply directly.
+
+### Step 2 — Verify before promoting
+
+After the user applies the change, run these read-only checks in order:
+
+```bash
+# 1. Sync status
+argocd app get <app-name>
+
+# 2. Pod health
+kubectl get pods -n <namespace> --context <context>
+
+# 3. Workflow write-back (if the app triggers Argo Workflows)
+kubectl get workflows -n <namespace> --context <context>
+
+# 4. External reachability
+curl -sI https://<app-domain>/healthz
+```
+
+All four gates must pass before promoting.
+
+### Step 3 — Move targetRevision back to main
+
+Once the rollout is stable, provide a handoff to restore the Application manifest:
+
+```yaml
+spec:
+  source:
+    targetRevision: main
+```
+
+**Never leave `targetRevision` pinned to a feature branch after rollout is complete.**
+
+## Rollout Lifecycle — App-Repo-Owned Manifest
+
+When an application repository owns its own ArgoCD Application manifest (e.g. `argocd-app-prod.yaml` committed inside the app repo), treat that file as **rollout control state** even if the main GitOps repo (`harumi-k8s`) remains unchanged.
+
+Rules:
+- Changes to `argocd-app-prod.yaml` in the app repo are equivalent to changes in the GitOps repo — apply the same inspect-before-acting and handoff requirements.
+- When asked to promote a rollout, check the app-repo manifest first:
+
+  ```bash
+  # Confirm which manifest ArgoCD is currently tracking
+  argocd app get <app-name> -o yaml | grep -E 'repoURL|targetRevision|path'
+  ```
+
+- If the app-repo manifest and the GitOps repo manifest conflict (e.g. different `targetRevision`), flag the conflict to the user before proceeding.
+- After a stable rollout, ensure both the app-repo manifest and the GitOps repo reflect `targetRevision: main` (or the agreed default branch).
+
 ## Deployment Patterns
 
 Three patterns for deploying applications via ArgoCD:

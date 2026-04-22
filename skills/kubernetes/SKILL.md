@@ -75,6 +75,110 @@ kubectl get [resource] -n [namespace] --context [context]
 
 See [references/workflow.md](references/workflow.md) for detailed phase instructions.
 
+## Ingress Exposure Decision
+
+Before creating or modifying an Ingress / ALB Ingress, confirm the exposure model:
+
+### Step 1 — Confirm scheme
+
+Ask (or read from harumi.yaml / existing manifests) whether the ALB should be `internal` or `internet-facing`:
+
+```yaml
+annotations:
+  kubernetes.io/ingress.class: alb
+  alb.ingress.kubernetes.io/scheme: internal          # or internet-facing
+  alb.ingress.kubernetes.io/target-type: ip
+```
+
+### Step 2 — Verify subnets match the scheme
+
+- **internal** → subnets must be private (no route to 0.0.0.0/0 via IGW)
+- **internet-facing** → subnets must be public (route to IGW present)
+
+If the subnets in the annotation or auto-discovery tags don't match the scheme, flag the mismatch before providing a handoff.
+
+### Step 3 — ALB scheme-change warning
+
+> ⚠️ **Changing `alb.ingress.kubernetes.io/scheme` on an existing Ingress requires ALB recreation.**
+> The AWS Load Balancer Controller cannot mutate the scheme of an existing ALB.
+> Recreation will:
+> - Delete the current ALB and its listeners
+> - Provision a new ALB (new DNS name, new ARN)
+> - May trigger **target-group association conflicts** if old target groups were shared or referenced by other listeners
+>
+> Always verify there are no shared target groups before proceeding. Provide a delete-then-recreate handoff (see Operational Recovery below), not a plain `kubectl apply`.
+
+## Operational Recovery — User-Authorized Mutations
+
+When the user **explicitly authorizes** a mutation for operational recovery (e.g. "go ahead and recreate the ingress", "please register the app in ArgoCD", "copy the secret"), switch from generic handoff language to a **step-by-step handoff with exact commands, a rollback note, and verification commands**.
+
+### Pattern: Ingress delete/recreate
+
+```
+## Ingress Recreation Handoff
+
+### Pre-flight checks
+kubectl get ingress <name> -n <namespace> --context <context> -o yaml   # save output as backup
+
+### Step 1 — Delete the existing Ingress
+kubectl delete ingress <name> -n <namespace> --context <context>
+
+### Step 2 — Apply the new manifest
+kubectl apply -f <manifest-file> --context <context> -n <namespace>
+
+### Rollback
+If the new ALB does not become healthy within 5 minutes:
+  kubectl delete ingress <name> -n <namespace> --context <context>
+  kubectl apply -f <backup-file> --context <context> -n <namespace>
+
+### Verification
+kubectl get ingress <name> -n <namespace> --context <context>
+kubectl describe ingress <name> -n <namespace> --context <context>   # confirm Address is populated
+curl -sI https://<app-domain>/healthz
+```
+
+### Pattern: ArgoCD app registration
+
+```
+## ArgoCD App Registration Handoff
+
+### Pre-flight checks
+argocd app list   # confirm app does not already exist under a different name
+
+### Step 1 — Apply the Application manifest
+kubectl apply -f <argocd-app-manifest> --context <context>
+
+### Rollback
+kubectl delete -f <argocd-app-manifest> --context <context>
+
+### Verification
+argocd app get <app-name>
+kubectl get pods -n <namespace> --context <context>
+```
+
+### Pattern: Secret bootstrap / copy
+
+```
+## Secret Bootstrap Handoff
+
+### Pre-flight checks
+kubectl get secret <secret-name> -n <target-namespace> --context <context>   # should return NotFound
+
+### Step 1 — Copy secret from source namespace
+kubectl get secret <secret-name> -n <source-namespace> --context <context> -o yaml \
+  | sed 's/namespace: <source-namespace>/namespace: <target-namespace>/' \
+  | kubectl apply -f - --context <context>
+
+### Rollback
+kubectl delete secret <secret-name> -n <target-namespace> --context <context>
+
+### Verification
+kubectl get secret <secret-name> -n <target-namespace> --context <context>
+kubectl describe secret <secret-name> -n <target-namespace> --context <context>
+```
+
+**Rule:** Only use these step-by-step patterns when the user has explicitly authorized the recovery action. For all other write operations, use the standard generic handoff.
+
 ## Quick Reference
 
 ### Cluster Context
