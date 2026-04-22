@@ -43,15 +43,17 @@
     {
       "id": 4,
       "prompt": "terraform plan output shows drift in module.vpc and module.rds (resources we are not changing today). I only want to apply changes to module.s3_artifacts. Use target='module.s3_artifacts'.",
-      "expected_output": "Acknowledges the unrelated drift in module.vpc and module.rds without acting on it. Generates a targeted apply command using -target=module.s3_artifacts (unquoted flag value, not target='module.s3_artifacts'). Includes a warning that using -target skips dependency validation.",
+      "expected_output": "Identifies the out-of-scope drift in module.vpc and module.rds. Proves the drift is pre-existing by running git diff and the relevant cloud CLI commands before proceeding. Presents the unrelated drift to the operator with a separate targeted plan recommendation using the documented quoted -target syntax. Runs a targeted plan for module.s3_artifacts review only. Does NOT jump to an apply handoff until the operator has reviewed the targeted plan and confirmed.",
       "files": [],
       "expectations": [
-        "Does NOT include module.vpc or module.rds in the apply command",
-        "Uses -target=module.s3_artifacts (flag syntax) rather than target='module.s3_artifacts' (shell assignment syntax)",
-        "Generates a handoff block with terraform apply -target=module.s3_artifacts -var-file=prod.tfvars",
-        "Notes that unrelated drift in module.vpc and module.rds will not be resolved by this apply",
-        "Warns that -target skips cross-resource dependency validation",
-        "Does NOT run terraform apply directly"
+        "Separates resources in the plan into in-scope (module.s3_artifacts) and out-of-scope (module.vpc, module.rds)",
+        "Runs git diff origin/main to confirm this branch did not touch the out-of-scope modules' source files",
+        "Runs a cloud CLI command (e.g. aws ec2 describe-vpcs or aws rds describe-db-instances) to verify the drift pre-dates this branch",
+        "Presents the unrelated drift with a warning block and recommends a separate targeted plan for operator review, e.g.: terraform plan -var-file=prod.tfvars -target='module.vpc'",
+        "Uses the quoted -target='module.s3_artifacts' flag form (as documented in the skill workflow step 7) in the targeted plan command",
+        "Runs terraform plan -var-file=prod.tfvars -target='module.s3_artifacts' for the operator to review before any apply",
+        "Does NOT provide an apply handoff before the operator has reviewed and confirmed the targeted plan",
+        "Does NOT bundle module.vpc or module.rds changes into the apply"
       ]
     }
   ]

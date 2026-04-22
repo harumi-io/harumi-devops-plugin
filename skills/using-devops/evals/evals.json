@@ -46,13 +46,14 @@
     {
       "id": 5,
       "prompt": "Session context shows: configured kube context is 'eks-prod' but kubectl config get-contexts reports the local context is named 'harumi-prod-eks'. I want to scale the frontend deployment.",
-      "expected_output": "Recognises the context name mismatch as a non-blocking warning, not a blocker. Surfaces the discrepancy clearly and provides the corrected kubectl --context flag using the locally available name. Invokes scale-deployment.",
+      "expected_output": "Surfaces the context name mismatch as a non-blocking Warning. Does NOT silently remap 'eks-prod' to 'harumi-prod-eks' or assume they are equivalent. Asks the user to confirm which context to use before proceeding. Does not invoke scale-deployment until the user confirms the correct context.",
       "files": [],
       "expectations": [
         "Does NOT treat the context name mismatch as a BLOCKING condition",
         "Flags the mismatch as a Warning (non-blocking), not a BLOCKING prerequisite",
-        "Uses the locally available context name 'harumi-prod-eks' in any generated kubectl commands",
-        "Invokes or references harumi-devops-plugin:scale-deployment to complete the request"
+        "Does NOT autonomously substitute 'harumi-prod-eks' for 'eks-prod' in generated kubectl commands without user confirmation",
+        "Asks the user to confirm the correct context name before generating any kubectl --context flag",
+        "Does NOT invoke harumi-devops-plugin:scale-deployment until the correct context is confirmed by the user"
       ]
     }
   ]
