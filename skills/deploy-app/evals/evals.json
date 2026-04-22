@@ -43,9 +43,14 @@
     {
       "id": 4,
       "prompt": "Deploy the 'frontend' app to prod using the isolated-prod-test rollout shape. The deployment shape is isolated-prod-test, targeting branch 'feature/payments-v2'.",
-      "expected_output": "Generates argocd-app-prod.yaml (not argocd-app.yaml) at the repo root with targetRevision set to the feature branch. Generates .github/workflows/cd-eks-prod.yaml (not cd-eks.yaml). Sets destination.namespace to 'frontend-prod-test'. All deploy/ manifests use 'frontend-prod-test' as the namespace.",
+      "expected_output": "Runs Step 2 cluster inspection (argocd app list, kubectl get namespace) and all Step 3 preflight checks before generating any manifests. Only after preflight passes does it generate argocd-app-prod.yaml at the repo root (not argocd-app.yaml) with targetRevision set to the feature branch, .github/workflows/cd-eks-prod.yaml (not cd-eks.yaml), destination.namespace 'frontend-prod-test', and all deploy/ manifests using 'frontend-prod-test' as the namespace.",
       "files": [],
       "expectations": [
+        "Runs argocd app list to check for an existing conflicting ArgoCD application before generating manifests (Step 2)",
+        "Runs kubectl get namespace frontend-prod-test to check whether the namespace already exists (Step 2)",
+        "Runs aws secretsmanager get-secret-value for the secret path harumi/frontend/prod as a preflight check (Step 3)",
+        "Runs aws ecr describe-repositories for the ECR repository as a preflight check (Step 3)",
+        "Does NOT generate any manifests until all preflight checks pass",
         "Creates argocd-app-prod.yaml at the repo root, not argocd-app.yaml",
         "Sets targetRevision to 'feature/payments-v2' in argocd-app-prod.yaml",
         "Sets destination.namespace to 'frontend-prod-test' in argocd-app-prod.yaml",
