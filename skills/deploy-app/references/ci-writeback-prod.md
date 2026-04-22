@@ -4,6 +4,8 @@ In-repo GitOps pattern: manifests live in `deploy/` inside the app repo. The CI 
 
 ## Architecture
 
+### Standard (`shared-prod`)
+
 ```
 <app-repo>/
 ├── argocd-app.yaml          # ArgoCD Application — lives at repo root, NOT inside deploy/
@@ -18,7 +20,29 @@ In-repo GitOps pattern: manifests live in `deploy/` inside the app repo. The CI 
     └── cd-eks.yaml
 ```
 
-`argocd-app.yaml` lives at the repo root so ArgoCD doesn't self-manage its own Application resource.
+`argocd-app.yaml` lives at the repo root so ArgoCD doesn't self-manage its own Application resource. `targetRevision: main` is the stable default.
+
+### Isolated Rollout Variant (`isolated-prod-test`)
+
+Use this shape to validate the prod deployment path without re-pointing the stable app definition. A separate ArgoCD Application tracks a temporary feature branch; once validation passes, delete it or update `targetRevision` to `main` and rename to the canonical app name.
+
+```
+<app-repo>/
+├── argocd-app.yaml           # Stable prod app — unchanged, keep pointing at main
+├── argocd-app-prod.yaml      # Isolated rollout app — tracks a feature branch until validated
+├── deploy/
+│   ├── namespace.yaml
+│   ├── deployment.yaml       # CI updates the image tag here via cd-eks-prod.yaml
+│   ├── service.yaml
+│   ├── ingress.yaml
+│   ├── configmap.yaml
+│   └── externalsecret.yaml   # Only if secrets are needed
+└── .github/workflows/
+    ├── cd-eks.yaml            # Stable prod CI — triggers on main
+    └── cd-eks-prod.yaml       # Isolated rollout CI — triggers on the feature branch
+```
+
+`argocd-app-prod.yaml` is a temporary Application resource for validating the deployment pipeline on a feature branch before promoting to `main`. It uses the same `deploy/` manifests as the stable app but with a different `targetRevision`. The `.github/workflows/cd-eks-prod.yaml` workflow triggers on the feature branch and writes back to `deploy/deployment.yaml` on that branch only.
 
 ## Placeholders
 
@@ -39,6 +63,33 @@ In-repo GitOps pattern: manifests live in `deploy/` inside the app repo. The CI 
 | `<app-repo>` | `frontend` | User input — GitHub repository name (repo part only) |
 | `<org>` | `harumi-io` | User input — GitHub organization name |
 | `<context>` | `eks-prod` | `harumi.yaml` `kubernetes.clusters[].context` |
+
+## Preflight Checks
+
+Run these before generating manifests. Each check must pass before proceeding.
+
+```bash
+# 1. AWS Secrets Manager secret exists
+aws secretsmanager get-secret-value --secret-id <secret-path> --region <aws-region>
+
+# 2. Required JSON keys exist (adjust key names to the app's expected env vars)
+aws secretsmanager get-secret-value --secret-id <secret-path> --region <aws-region> \
+  --query SecretString --output text | jq 'keys'
+
+# 3. ECR repository exists
+aws ecr describe-repositories --repository-names <ecr-repo> --region <aws-region>
+
+# 4. OIDC role can be assumed and allows ECR push
+aws sts assume-role-with-web-identity --role-arn <oidc-role-arn> --role-session-name preflight-check \
+  --web-identity-token "$(cat /dev/null)" 2>&1 | head -5
+# (A 400/invalid token is expected; a 403 AccessDenied means the role policy is misconfigured)
+
+# 5. ArgoCD repo secret exists in-cluster
+kubectl get secret -n argocd --context <context> | rg repo
+
+# 6. Target cluster context exists locally
+kubectl config get-contexts -o name | rg "^<context>$"
+```
 
 ## Manifest Templates
 
@@ -208,7 +259,7 @@ spec:
                   number: 80
 ```
 
-### argocd-app.yaml (repo root, not inside deploy/)
+### argocd-app.yaml (repo root, not inside deploy/) — Standard (`shared-prod`)
 
 ```yaml
 # ArgoCD Application manifest — Production
@@ -245,7 +296,51 @@ spec:
         maxDuration: 3m
 ```
 
-## GitHub Actions Workflow Template
+### argocd-app-prod.yaml (repo root) — Isolated Rollout (`isolated-prod-test`)
+
+Use this when validating the prod deployment path without re-pointing the stable app. Once validation passes, delete this resource or update `targetRevision` to `main` and replace `argocd-app.yaml`.
+
+```yaml
+# ArgoCD Application manifest — Isolated Prod Rollout Test
+# Apply to register the isolated rollout app:
+#   kubectl apply -f argocd-app-prod.yaml --context <context>
+# Delete after validation completes and the stable app definition takes over.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: <app-name>-prod-test
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<org>/<app-repo>.git
+    # targetRevision points to the feature branch under validation, not main.
+    # This keeps the stable argocd-app.yaml pointing at main unaffected.
+    targetRevision: <feature-branch>
+    path: deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: <namespace>
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+```
+
+## GitHub Actions Workflow Templates
+
+### Standard (`shared-prod`): `.github/workflows/cd-eks.yaml`
 
 Create `.github/workflows/cd-eks.yaml` in the app repo:
 
@@ -315,6 +410,77 @@ jobs:
 ```
 
 > **Note:** This workflow uses `GITHUB_TOKEN` (the default token, automatically available in all GitHub Actions runs). No additional secrets are needed for the write-back push. The `contents: write` permission grants push access.
+
+### Isolated Rollout (`isolated-prod-test`): `.github/workflows/cd-eks-prod.yaml`
+
+Create `.github/workflows/cd-eks-prod.yaml` in the app repo. This workflow triggers on the feature branch under validation and writes back to `deploy/deployment.yaml` on that branch only. The stable `cd-eks.yaml` workflow (triggers on `main`) is unaffected.
+
+```yaml
+name: CD Pipeline - EKS Prod (Isolated Rollout)
+
+on:
+  push:
+    branches:
+      - <feature-branch>   # Replace with the actual feature branch name
+
+permissions:
+  id-token: write
+  contents: write  # required for git push write-back
+
+env:
+  AWS_REGION: <aws-region>
+  AWS_ACCOUNT_ID: '<aws-account-id>'
+  ECR_REPOSITORY: <ecr-repo>
+  # Add build-time env vars here if needed
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: <oidc-role-arn>
+          aws-region: <aws-region>
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }} \
+            -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest \
+            .
+
+      - name: Push Docker image to Amazon ECR
+        run: |
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: Update deployment manifest with new image tag
+        run: |
+          CONFIG_HASH=$(echo -n "${{ github.sha }}-$(date +%s)" | sha256sum | cut -c1-8)
+          sed -i "s|image: .*${{ env.ECR_REPOSITORY }}:.*|image: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ github.sha }}|" deploy/deployment.yaml
+          sed -i "s|harumi.io/config-hash: .*|harumi.io/config-hash: \"${CONFIG_HASH}\"|" deploy/deployment.yaml
+
+      - name: Commit and push manifest changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/deployment.yaml
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          # [skip ci] prevents this write-back commit from re-triggering the workflow
+          git commit -m "chore(deploy): update image tag to ${GITHUB_SHA::8} [skip ci]"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push
+```
+
+> **Note:** This workflow uses `GITHUB_TOKEN`. No additional secrets needed. Once the isolated rollout is validated, delete `argocd-app-prod.yaml` from the cluster and this workflow file from the repo.
 
 ## Branch Protection — Required Bypass
 
