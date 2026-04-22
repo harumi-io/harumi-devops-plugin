@@ -162,26 +162,30 @@ kubectl get pods -n <namespace> --context <context>
 ```
 ## Secret Bootstrap Handoff
 
-### Pre-flight checks
-kubectl get secret <secret-name> -n <target-namespace> --context <context>   # should return NotFound
+# <source-context>  — cluster the secret currently lives in
+# <target-context>  — cluster the secret is being copied to
+# These may be the same cluster; keep them explicit regardless.
 
-### Step 1 — Generate a sanitized manifest (strips server-managed metadata)
-kubectl get secret <secret-name> -n <source-namespace> --context <context> -o json \
+### Pre-flight checks
+kubectl get secret <secret-name> -n <target-namespace> --context <target-context>   # should return NotFound
+
+### Step 1 — Generate a sanitized manifest from the source cluster (strips server-managed metadata)
+kubectl get secret <secret-name> -n <source-namespace> --context <source-context> -o json \
   | jq '{apiVersion: .apiVersion, kind: .kind, type: .type,
           metadata: {name: .metadata.name, namespace: "<target-namespace>"},
           data: .data}' \
   > secret-<secret-name>-<target-namespace>.yaml
 # Review the generated file before applying
 
-### Step 2 — Apply
-kubectl apply -f secret-<secret-name>-<target-namespace>.yaml --context <context>
+### Step 2 — Apply to the target cluster
+kubectl apply -f secret-<secret-name>-<target-namespace>.yaml --context <target-context>
 
 ### Rollback
-kubectl delete secret <secret-name> -n <target-namespace> --context <context>
+kubectl delete secret <secret-name> -n <target-namespace> --context <target-context>
 
 ### Verification
-kubectl get secret <secret-name> -n <target-namespace> --context <context>
-kubectl describe secret <secret-name> -n <target-namespace> --context <context>
+kubectl get secret <secret-name> -n <target-namespace> --context <target-context>
+kubectl describe secret <secret-name> -n <target-namespace> --context <target-context>
 
 ### Clean up
 rm secret-<secret-name>-<target-namespace>.yaml
