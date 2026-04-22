@@ -77,10 +77,16 @@ aws secretsmanager get-secret-value --secret-id <secret-path> --region <aws-regi
 # 3. ECR repository exists
 aws ecr describe-repositories --repository-names <ecr-repo> --region <aws-region>
 
-# 4. OIDC role can be assumed and allows ECR push
-aws sts assume-role-with-web-identity --role-arn <oidc-role-arn> --role-session-name preflight-check \
-  --web-identity-token "$(cat /dev/null)" 2>&1 | head -5
-# (A 400/invalid token error is expected; a 403 AccessDenied means the role policy is wrong)
+# 4. OIDC role exists and trust policy references the correct GitHub OIDC provider
+#    Extract the role name from the ARN (last path segment after '/').
+OIDC_ROLE_NAME=$(echo "<oidc-role-arn>" | awk -F'/' '{print $NF}')
+aws iam get-role --role-name "${OIDC_ROLE_NAME}" \
+  --query 'Role.AssumeRolePolicyDocument' --output json
+# Verify the output includes "token.actions.githubusercontent.com" as the Federated principal
+# and a Condition scoped to the correct repo ("repo:<org>/<app-repo>:*").
+# Note: full OIDC assume-role can only be executed from a GitHub Actions runner.
+# This check confirms the role exists and its trust policy is structurally correct;
+# actual end-to-end push access is verified on the first CI run.
 
 # 5. ArgoCD repo secret exists in-cluster
 kubectl get secret -n argocd --context <context> | rg repo
@@ -99,9 +105,13 @@ Using the templates in the environment's reference file, create these files in t
 - `deploy-dev/namespace.yaml`, `deploy-dev/configmap.yaml`, `deploy-dev/externalsecret.yaml` (if secrets needed), `deploy-dev/deployment.yaml`, `deploy-dev/service.yaml`, `deploy-dev/ingress.yaml`
 - `argocd-app.yaml` (repo root — NOT inside `deploy-dev/`)
 
-**For prod:**
+**For prod (`shared-prod`):**
 - `deploy/namespace.yaml`, `deploy/configmap.yaml`, `deploy/externalsecret.yaml` (if secrets needed), `deploy/deployment.yaml`, `deploy/service.yaml`, `deploy/ingress.yaml`
-- `argocd-app.yaml` (repo root — NOT inside `deploy/`)
+- `argocd-app.yaml` (repo root — NOT inside `deploy/`); `targetRevision: main`
+
+**For prod (`isolated-prod-test`):**
+- `deploy/namespace.yaml`, `deploy/configmap.yaml`, `deploy/externalsecret.yaml` (if secrets needed), `deploy/deployment.yaml`, `deploy/service.yaml`, `deploy/ingress.yaml`
+- `argocd-app-prod.yaml` (repo root — NOT inside `deploy/`); `targetRevision: <feature-branch>`; `destination.namespace: <app-name>-prod-test`
 
 ### Step 5: Generate CI workflow
 
@@ -125,7 +135,9 @@ Use `GITHUB_TOKEN` for the write-back commit — no additional secrets needed.
 Use the handoff template from the environment's reference file to provide the exact commands needed to deploy. Always include:
 
 1. Push manifests to app repo
-2. Register ArgoCD app (`kubectl apply -f argocd-app.yaml`)
+2. Register ArgoCD app:
+   - `shared-prod`: `kubectl apply -f argocd-app.yaml`
+   - `isolated-prod-test`: `kubectl apply -f argocd-app-prod.yaml`
 
 Remind the user to verify after apply:
 ```bash
