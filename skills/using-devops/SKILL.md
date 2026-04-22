@@ -132,7 +132,7 @@ Invoke `harumi-devops-plugin:observability` when:
 
 ## Cluster Read-Access Rules
 
-Skills use locally configured kubectl contexts for **read-only** cluster access.
+When locally configured kubectl contexts are available, skills may use them for **read-only** cluster access. Live cluster access is not assumed — skills must work usefully without it.
 
 **Allowed commands:**
 - `kubectl get`, `kubectl describe`, `kubectl logs`, `kubectl top`
@@ -152,7 +152,7 @@ These apply to ALL DevOps skills:
 1. **Never run `terraform apply` or `terraform destroy`** — Always provide a handoff with the exact command for the user to execute
 2. **Never `kubectl delete` or any write operation without explicit user confirmation** — this applies to ALL environments (production, staging, development). No exceptions.
 3. **Never push images to production registries without confirmation**
-4. **Always verify current state before making changes** — Use `aws` CLI and `kubectl` to confirm resource existence and configuration
+4. **When live access is available, verify current state before making changes** — If `aws` CLI or `kubectl` access is present, use it to confirm resource existence and configuration; otherwise state assumptions explicitly and ask the user to verify
 5. **Always present the handoff pattern for destructive actions:**
 
 ```

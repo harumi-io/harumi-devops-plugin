@@ -126,7 +126,7 @@ docs:
     - docs/runbooks/*
 ```
 
-If no config file exists, the plugin surfaces a message prompting you to create `harumi.yaml` or `.devops.yaml`. The `sync-docs` skill can generate `harumi.yaml` from your codebase and cluster state.
+If no config file exists, the plugin surfaces a message prompting you to create `harumi.yaml` or `.devops.yaml`. The `sync-docs` skill can generate `harumi.yaml` from your codebase and, where cluster or cloud access is available, live infrastructure state.
 
 ## Skills
 
@@ -166,7 +166,7 @@ If no config file exists, the plugin surfaces a message prompting you to create 
 | Skill | Description |
 |-------|-------------|
 | `using-devops` | Bootstrap skill injected at session start — announces available skills and trigger rules |
-| `sync-docs` | Keep repo docs in sync with actual infrastructure and cluster state |
+| `sync-docs` | Keep repo docs in sync with infrastructure code and cluster state where available |
 
 ## Agents
 
@@ -198,7 +198,7 @@ The plugin is aware of two repositories:
 | `harumi-io/infrastructure` | Terraform IaC (AWS) — VPC, ECS, EKS, RDS, IAM, DNS |
 | `harumi-io/harumi-k8s` | Kubernetes manifests, ArgoCD apps, Helm values, Grafana dashboards |
 
-Skills use locally configured kubectl contexts for **read-only** cluster access. All write operations require user confirmation via handoff.
+When locally configured kubectl contexts are available, skills may use them for **read-only** cluster access. Live cluster access is not assumed. All write operations require user confirmation via handoff.
 
 ## Evals
 
