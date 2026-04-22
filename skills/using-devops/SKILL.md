@@ -1,6 +1,6 @@
 ---
 name: using-devops
-description: "Bootstrap skill for harumi-devops-plugin. Injected at session start. Announces available DevOps skills, loads harumi.yaml config, defines trigger rules, enforces safety rules, and detects drift."
+description: "Bootstrap skill for harumi-devops-plugin. Injected at session start. Announces available DevOps skills, loads repo config (harumi.yaml or .devops.yaml), defines trigger rules, enforces safety rules, and detects drift."
 ---
 
 # DevOps Plugin

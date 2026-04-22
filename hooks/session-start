@@ -28,18 +28,44 @@ else
 fi
 
 # --- Kube-context validation ---
-kube_warnings=""
-if command -v kubectl &>/dev/null && [ -n "$user_config" ] && [ "$config_source" != "not found" ]; then
-    available_contexts=$(kubectl config get-contexts -o name 2>/dev/null || true)
-    configured_contexts=$(printf '%s' "$user_config" | grep -E '^\s+context:\s+\S' | awk '{print $2}' || true)
+# kube_validation holds the full validation result surfaced in session context.
+# It is always set when a config is loaded so downstream skills know the status.
+kube_validation=""
+if [ "$config_source" != "not found" ] && [ -n "$user_config" ]; then
+    if ! command -v kubectl &>/dev/null; then
+        kube_validation="Kube-context validation skipped: kubectl not found in PATH."
+    else
+        available_contexts=$(kubectl config get-contexts -o name 2>/dev/null || true)
+        # Extract context values resilient to common YAML shapes:
+        #   context: eks-prod
+        #   context: "eks-prod"
+        #   context: 'eks-prod'
+        #   - context: eks-prod   (list-item form)
+        configured_contexts=$(printf '%s' "$user_config" \
+            | grep -E '^\s*-?\s*context:\s*\S' \
+            | sed 's/.*context:[[:space:]]*//' \
+            | sed 's/[[:space:]]*#.*//' \
+            | sed 's/[[:space:]]*$//' \
+            | sed "s/^['\"]//; s/['\"]$//" \
+            || true)
 
-    while IFS= read -r ctx; do
-        [ -z "$ctx" ] && continue
-        if ! printf '%s\n' "$available_contexts" | grep -qxF "$ctx"; then
-            kube_warnings="${kube_warnings:+${kube_warnings}
+        missing=""
+        while IFS= read -r ctx; do
+            [ -z "$ctx" ] && continue
+            if ! printf '%s\n' "$available_contexts" | grep -qxF "$ctx"; then
+                missing="${missing:+${missing}
 }- Missing kube context: ${ctx}"
+            fi
+        done <<< "$configured_contexts"
+
+        if [ -n "$missing" ]; then
+            kube_validation="$missing"
+        elif [ -n "$configured_contexts" ]; then
+            kube_validation="All configured contexts are available locally."
+        else
+            kube_validation="No contexts configured in repo config."
         fi
-    done <<< "$configured_contexts"
+    fi
 fi
 
 # --- Drift detection ---
@@ -91,8 +117,8 @@ fi
 # --- Build context ---
 config_block="## Active Configuration (source: ${config_source})\n\n\`\`\`yaml\n${user_config}\n\`\`\`"
 
-if [ -n "$kube_warnings" ]; then
-    config_block="${config_block}\n\n## Kube-Context Validation\n\n${kube_warnings}"
+if [ -n "$kube_validation" ]; then
+    config_block="${config_block}\n\n## Kube-Context Validation\n\n${kube_validation}"
 fi
 
 if [ -n "$drift_summary" ]; then
