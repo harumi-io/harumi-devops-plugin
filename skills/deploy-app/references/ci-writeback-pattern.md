@@ -1,6 +1,6 @@
 # CI Write-back Deployment Pattern
 
-In-repo GitOps pattern: manifests live in `deploy-dev/` inside the app repo. The CI pipeline writes the new image tag back to `deploy-dev/deployment.yaml` and commits it to the branch. ArgoCD monitors the branch and syncs automatically.
+In-repo GitOps pattern: manifests live in `deploy-dev/` inside the app repo. The CI pipeline writes the new image tag back to `deploy-dev/deployment.yaml` and commits it to the tracked branch. ArgoCD monitors the configured `targetRevision` branch and syncs automatically.
 
 ## Architecture
 
@@ -18,7 +18,7 @@ In-repo GitOps pattern: manifests live in `deploy-dev/` inside the app repo. The
     └── cd-eks-dev.yaml
 ```
 
-`argocd-app.yaml` lives at the repo root so ArgoCD doesn't self-manage its own Application resource. This allows patching `targetRevision` for feature-branch testing without ArgoCD reverting it.
+`argocd-app.yaml` lives at the repo root so ArgoCD doesn't self-manage its own Application resource. The `targetRevision` field controls which branch ArgoCD tracks — set to `dev` for the standard dev environment. For feature-branch testing, patch `targetRevision` to the feature branch; because `argocd-app.yaml` is not inside `deploy-dev/`, ArgoCD will not revert that patch.
 
 ## Placeholders
 
@@ -36,7 +36,7 @@ In-repo GitOps pattern: manifests live in `deploy-dev/` inside the app repo. The
 | `<app-port>` | `3000` | User input |
 | `<health-path>` | `/api/health` | User input |
 | `<certificate-arn>` | `arn:aws:acm:...` | `harumi.yaml` or ACM console |
-| `<app-repo>` | `frontend` | User input — GitHub repository name (e.g., `harumi-io/frontend`, repo part only) |
+| `<app-repo>` | `frontend` | User input — GitHub repository name (repo part only, e.g., `harumi-io/frontend` → `frontend`) |
 | `<org>` | `harumi-io` | User input — GitHub organization name |
 | `<context>` | `eks-dev` | `harumi.yaml` `kubernetes.clusters[].context` |
 

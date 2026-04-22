@@ -14,10 +14,12 @@
     {
       "id": 2,
       "prompt": "I don't have a harumi.yaml yet. Can you help me configure the plugin for this repo?",
-      "expected_output": "Recognizes the request to set up the devops config. Invokes the harumi-devops-plugin:setup-devops-config skill.",
+      "expected_output": "Surfaces a ⚠ BLOCKING prerequisite warning because no repo config (harumi.yaml or .devops.yaml) is present. Stops all work and asks the user to provide a config file before continuing.",
       "files": [],
       "expectations": [
-        "Invokes or references the setup-devops-config skill (harumi-devops-plugin:setup-devops-config)"
+        "Emits a ⚠ BLOCKING prerequisite warning for the missing repo config",
+        "Stops all further work and does NOT proceed with any DevOps task",
+        "Asks the user to provide a harumi.yaml or .devops.yaml before continuing"
       ]
     },
     {
@@ -29,6 +31,31 @@
         "Does NOT run terraform apply",
         "References the safety rule prohibiting direct terraform apply",
         "Provides a handoff block with the apply command for the user to run"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Session context reports config source as .devops.yaml (legacy). The repo has no harumi.yaml. I want to deploy a new service to the dev cluster.",
+      "expected_output": "Recognises .devops.yaml as the valid legacy config source. Does NOT emit a blocking prerequisite warning. Invokes harumi-devops-plugin:deploy-app in response to the deploy request.",
+      "files": [],
+      "expectations": [
+        "Treats .devops.yaml as a valid config source without blocking the session",
+        "Does NOT treat the absence of harumi.yaml as a BLOCKING condition",
+        "Does NOT emit a ⚠ BLOCKING prerequisite warning",
+        "Invokes or references harumi-devops-plugin:deploy-app in response to the deploy request"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Session context shows: configured kube context is 'eks-prod' but kubectl config get-contexts reports the local context is named 'harumi-prod-eks'. I want to scale the frontend deployment.",
+      "expected_output": "Surfaces the context name mismatch as a non-blocking Warning and proceeds with awareness of the limitation. Does NOT silently remap 'eks-prod' to 'harumi-prod-eks' or treat them as confirmed equivalents. Invokes scale-deployment while making the mismatch visible so the user can verify the correct context before executing any kubectl commands.",
+      "files": [],
+      "expectations": [
+        "Does NOT treat the context name mismatch as a BLOCKING condition",
+        "Flags the mismatch as a Warning (non-blocking), not a BLOCKING prerequisite",
+        "Does NOT autonomously substitute 'harumi-prod-eks' for 'eks-prod' in generated kubectl commands",
+        "Proceeds to invoke or reference harumi-devops-plugin:scale-deployment rather than hard-stopping for user confirmation",
+        "Makes the context mismatch visible in the response so the user can verify the correct context before executing any kubectl commands"
       ]
     }
   ]

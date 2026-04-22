@@ -30,6 +30,13 @@ Clone the repository and register the plugin in Cursor Agent chat:
 
 ## Configuration
 
+The plugin reads a repo config file from the root of the repository it is installed into.
+
+**Preferred:** `harumi.yaml`
+**Legacy fallback:** `.devops.yaml` (backward-compatible — loaded automatically when `harumi.yaml` is absent)
+
+The session-start hook loads `harumi.yaml` when present; otherwise it falls back to `.devops.yaml`. It checks Kubernetes contexts declared in the config against the local kubeconfig and reports their availability. A missing repo config is the only blocking condition — surfaced as `⚠ BLOCKING:` in the session context. Kubernetes access state (missing kubectl, unconfigured contexts, unreadable kubeconfig) is reported as informational or a warning; live cluster access is not assumed.
+
 Create a `harumi.yaml` in your repository root:
 
 ```yaml
@@ -119,7 +126,7 @@ docs:
     - docs/runbooks/*
 ```
 
-If no `harumi.yaml` exists, the `sync-docs` skill can generate one from your codebase and cluster state.
+If no config file exists, the plugin surfaces a message prompting you to create `harumi.yaml` or `.devops.yaml`. The `sync-docs` skill can generate `harumi.yaml` from your codebase and, where cluster or cloud access is available, live infrastructure state.
 
 ## Skills
 
@@ -159,7 +166,7 @@ If no `harumi.yaml` exists, the `sync-docs` skill can generate one from your cod
 | Skill | Description |
 |-------|-------------|
 | `using-devops` | Bootstrap skill injected at session start — announces available skills and trigger rules |
-| `sync-docs` | Keep repo docs in sync with actual infrastructure and cluster state |
+| `sync-docs` | Keep repo docs in sync with infrastructure code and cluster state where available |
 
 ## Agents
 
@@ -176,11 +183,21 @@ Agents are thin wrappers that run a skill in a fresh, isolated context. They ena
 
 ## How It Works
 
-1. **Session start** — The hook loads the bootstrap skill (`using-devops`), reads `harumi.yaml`, and checks for drift
+1. **Session start** — The hook loads the bootstrap skill (`using-devops`), reads `harumi.yaml` (or `.devops.yaml` as fallback), reports Kubernetes context availability, and checks for drift
 2. **Drift detection** — Compares `.harumi-last-sync` with current HEAD. If new commits landed, triggers `sync-docs` to update documentation before other work
 3. **Skill triggering** — The bootstrap skill tells the AI when to invoke domain-specific skills based on task context
 4. **Safety rules** — Destructive operations (`apply`, `destroy`, `delete`) always require user confirmation via handoff
 5. **Parallel agents** — For multi-domain tasks, agents dispatch work to isolated contexts that run concurrently
+
+## Source of Truth for Generated Files
+
+Generated files such as `harumi.yaml` and the architecture docs (`docs/architecture/*.md`) are always refreshed from the **best available source per surface**:
+
+- **Live AWS state** — when the `aws` CLI and credentials are present, AWS API responses (account metadata, EKS cluster names, ECR registry URIs, Route53 domains) are used for AWS-sourced fields. `harumi.yaml` is a generated projection of real infrastructure and must be rewritten whenever these live values drift from the checked-in file.
+- **Live Kubernetes state** — when `kubectl` contexts are configured, cluster queries (context names, ingress domains, namespace inventory) are used for Kubernetes-sourced fields.
+- **Each source falls back independently** — if AWS is reachable but Kubernetes is not (or vice versa), live data is used where available and repo data fills the gap for the unreachable surface. The sync summary explicitly reports "live drift could not be verified for [AWS / Kubernetes]" per source; no cloud or cluster state is ever invented.
+
+Human-authored files (`README.md`, `CLAUDE.md`, `AGENTS.md`, runbooks) are never modified without showing the stale claim, the live or repo fact (labeled by source), the proposed edit, and receiving explicit user approval.
 
 ## Managed Repositories
 
@@ -191,7 +208,7 @@ The plugin is aware of two repositories:
 | `harumi-io/infrastructure` | Terraform IaC (AWS) — VPC, ECS, EKS, RDS, IAM, DNS |
 | `harumi-io/harumi-k8s` | Kubernetes manifests, ArgoCD apps, Helm values, Grafana dashboards |
 
-Skills use locally configured kubectl contexts for **read-only** cluster access. All write operations require user confirmation via handoff.
+When locally configured kubectl contexts are available, skills may use them for **read-only** cluster access. Live cluster access is not assumed. All write operations require user confirmation via handoff.
 
 ## Evals
 

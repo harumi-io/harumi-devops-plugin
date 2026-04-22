@@ -1,6 +1,6 @@
 ---
 name: using-devops
-description: "Bootstrap skill for harumi-devops-plugin. Injected at session start. Announces available DevOps skills, loads harumi.yaml config, defines trigger rules, enforces safety rules, and detects drift."
+description: "Bootstrap skill for harumi-devops-plugin. Injected at session start. Announces available DevOps skills, loads repo config (harumi.yaml or .devops.yaml), defines trigger rules, enforces safety rules, and detects drift."
 ---
 
 # DevOps Plugin
@@ -16,11 +16,20 @@ This plugin manages two repositories:
 | `harumi-io/infrastructure` | Terraform IaC (AWS) — VPC, ECS, EKS, RDS, IAM, DNS |
 | `harumi-io/harumi-k8s` | Kubernetes manifests, ArgoCD apps, Helm values, Grafana dashboards |
 
-Read `harumi.yaml` (injected at session start) for cluster names, contexts, endpoints, and naming conventions.
+Read the active repo config (injected at session start) for cluster names, contexts, endpoints, and naming conventions. The hook loads `harumi.yaml` when present, otherwise falls back to the legacy `.devops.yaml`. Trust the reported **config source** and any **prerequisite warnings** in the session context over stale docs or examples.
+
+If the session context contains a `## Prerequisites` section, interpret it as follows:
+- `⚠ BLOCKING:` — stop all work immediately and ask the user to resolve this before continuing. The only blocking condition is a missing repo config, because without it the plugin cannot give accurate project-specific guidance.
+- `⚠ Warning:` — proceed with awareness of the limitation (e.g. kubeconfig is present but unreadable).
+- Any other line — informational; no action required.
+
+Live cluster and AWS access is **not assumed**. Missing `kubectl`, an absent kubeconfig, or locally unconfigured contexts are normal states. The assistant can still produce manifests, Terraform, runbooks, and other guidance without live cluster reads.
 
 ## Drift Detection
 
 If the drift detection section below reports drift, invoke `harumi-devops-plugin:sync-docs` **before** proceeding with any other work. This ensures documentation is up to date before making further changes.
+
+When `sync-docs` runs, it queries AWS and Kubernetes **independently** and uses the best available reading per surface. Live AWS state (account metadata, EKS clusters, ECR registries) is preferred for AWS-sourced fields when the `aws` CLI and credentials are present; live Kubernetes state is preferred for cluster-sourced fields when `kubectl` contexts are configured. When a source is unreachable, `sync-docs` falls back to repo data for that surface and explicitly reports "live drift could not be verified for [AWS / Kubernetes]" — it does not treat missing access as all-or-nothing. Do not assume either live source is present for every session.
 
 ## Available Skills
 
@@ -125,13 +134,13 @@ Invoke `harumi-devops-plugin:observability` when:
 
 ## Cluster Read-Access Rules
 
-Skills use locally configured kubectl contexts for **read-only** cluster access.
+When locally configured kubectl contexts are available, skills may use them for **read-only** cluster access. Live cluster access is not assumed — skills must work usefully without it.
 
 **Allowed commands:**
 - `kubectl get`, `kubectl describe`, `kubectl logs`, `kubectl top`
 - `argocd app get`, `argocd app list`
 - `helm list`, `helm get values`
-- `curl` against observability endpoints (from `harumi.yaml` observability.endpoints)
+- `curl` against observability endpoints (from the active repo config's `observability.endpoints`)
 
 **Forbidden commands (require handoff to user):**
 - `kubectl apply`, `kubectl delete`, `kubectl edit`, `kubectl patch`, `kubectl create`
@@ -145,7 +154,7 @@ These apply to ALL DevOps skills:
 1. **Never run `terraform apply` or `terraform destroy`** — Always provide a handoff with the exact command for the user to execute
 2. **Never `kubectl delete` or any write operation without explicit user confirmation** — this applies to ALL environments (production, staging, development). No exceptions.
 3. **Never push images to production registries without confirmation**
-4. **Always verify current state before making changes** — Use `aws` CLI and `kubectl` to confirm resource existence and configuration
+4. **When live access is available, verify current state before making changes** — If `aws` CLI or `kubectl` access is present, use it to confirm resource existence and configuration; otherwise state assumptions explicitly and ask the user to verify
 5. **Always present the handoff pattern for destructive actions:**
 
 ```
@@ -209,7 +218,7 @@ When the user request maps to 2+ compatible skills:
 
 ## Configuration
 
-The active `harumi.yaml` config (loaded at session start) tells you:
+The active repo config (loaded at session start) tells you:
 - **AWS account** — account ID, region, alias
 - **Terraform settings** — version, state backend, state bucket, var file, module paths
 - **Clusters** — names, contexts, environments, domains, registries
@@ -217,4 +226,4 @@ The active `harumi.yaml` config (loaded at session start) tells you:
 - **Observability endpoints** — Prometheus, Grafana, Loki, Tempo, Alertmanager URLs
 - **Naming pattern** — how resources are named
 
-Read config values to adapt your guidance to the specific context.
+The hook prefers `harumi.yaml`; if absent it loads the legacy `.devops.yaml`. The session context reports which file was loaded. Any missing repo config is surfaced as `⚠ BLOCKING:` in `## Prerequisites` — work must stop until the human provides one. Kubernetes access status (kubectl availability, context presence) is reported as informational or `⚠ Warning:` only; live cluster access is not assumed.

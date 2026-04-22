@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook for harumi-devops-plugin
-# Loads the bootstrap skill, reads harumi.yaml config, and detects drift
+# Loads the bootstrap skill, reads repo config (harumi.yaml or .devops.yaml), and detects drift
 
 set -euo pipefail
 
@@ -10,16 +10,86 @@ PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # --- Read bootstrap skill ---
 using_devops_content=$(cat "${PLUGIN_ROOT}/skills/using-devops/SKILL.md" 2>&1 || echo "Error reading using-devops skill")
 
-# --- Read harumi.yaml config ---
+# --- Read repo config (prefer harumi.yaml, fall back to .devops.yaml) ---
 user_config=""
-repo_config_path="${PWD}/harumi.yaml"
+repo_config_path=""
+config_source="not found"
 
-if [ -f "$repo_config_path" ]; then
+if [ -f "${PWD}/harumi.yaml" ]; then
+    repo_config_path="${PWD}/harumi.yaml"
     user_config=$(cat "$repo_config_path" 2>/dev/null || true)
     config_source="harumi.yaml"
+elif [ -f "${PWD}/.devops.yaml" ]; then
+    repo_config_path="${PWD}/.devops.yaml"
+    user_config=$(cat "$repo_config_path" 2>/dev/null || true)
+    config_source=".devops.yaml"
 else
-    config_source="not found"
-    user_config="# No harumi.yaml found. Run the sync-docs skill to generate one."
+    user_config="# No repo config found. Create harumi.yaml or .devops.yaml."
+fi
+
+# --- Prerequisites validation ---
+# Three output tiers used in the ## Prerequisites section:
+#   ⚠ BLOCKING: <msg>  — stop work, ask human before continuing
+#   ⚠ Warning:  <msg>  — unexpected broken state; note the limitation
+#   <msg>              — informational; no action needed
+#
+# Live cluster / AWS access is NOT assumed. Missing kubectl or local
+# contexts is a normal state, not a blocking condition.
+prereq_lines=""
+append_prereq() {
+    prereq_lines="${prereq_lines:+${prereq_lines}
+}$1"
+}
+
+# Check 1: repo config (BLOCKING — cannot give accurate project-specific
+# guidance without knowing the project's clusters, account, naming, etc.)
+if [ "$config_source" = "not found" ]; then
+    append_prereq "⚠ BLOCKING: No repo config found. Create harumi.yaml or .devops.yaml — without it the plugin cannot give accurate project-specific guidance."
+fi
+
+# Check 2: kube access status (informational / warning only — live cluster
+# access is not assumed; the assistant can still do useful work without it)
+if [ "$config_source" != "not found" ] && [ -n "$user_config" ]; then
+    if ! command -v kubectl &>/dev/null; then
+        append_prereq "kubectl not found in PATH — live cluster reads unavailable for this session."
+    else
+        # Use || capture so set -euo pipefail does not abort on kubectl failure.
+        kubectl_exit=0
+        available_contexts=$(kubectl config get-contexts -o name 2>/dev/null) || kubectl_exit=$?
+
+        if [ $kubectl_exit -ne 0 ]; then
+            # kubectl present but kubeconfig broken — unexpected, worth flagging
+            append_prereq "⚠ Warning: kubectl present but kubeconfig is unreadable (kubectl config get-contexts exited ${kubectl_exit}) — live cluster reads will fail."
+        else
+            # Extract context values resilient to common YAML shapes:
+            #   context: eks-prod
+            #   context: "eks-prod"
+            #   context: 'eks-prod'
+            #   - context: eks-prod   (list-item form)
+            configured_contexts=$(printf '%s' "$user_config" \
+                | grep -E '^\s*-?\s*context:\s*\S' \
+                | sed 's/.*context:[[:space:]]*//' \
+                | sed 's/[[:space:]]*#.*//' \
+                | sed 's/[[:space:]]*$//' \
+                | sed "s/^['\"]//; s/['\"]$//" \
+                || true)
+
+            missing_count=0
+            while IFS= read -r ctx; do
+                [ -z "$ctx" ] && continue
+                if ! printf '%s\n' "$available_contexts" | grep -qxF "$ctx"; then
+                    append_prereq "Context '${ctx}' declared in repo config is not configured locally — live reads against this context are unavailable."
+                    missing_count=$((missing_count + 1))
+                fi
+            done <<< "$configured_contexts"
+
+            if [ "$missing_count" -eq 0 ] && [ -n "$configured_contexts" ]; then
+                append_prereq "All configured Kubernetes contexts are available locally."
+            elif [ -z "$configured_contexts" ]; then
+                append_prereq "No Kubernetes contexts declared in repo config."
+            fi
+        fi
+    fi
 fi
 
 # --- Drift detection ---
@@ -44,7 +114,7 @@ if [ -f "$repo_config_path" ] && command -v git &>/dev/null && git rev-parse --g
 
             while IFS= read -r file; do
                 case "$file" in
-                    docs/architecture/*|harumi.yaml)
+                    docs/architecture/*|harumi.yaml|.devops.yaml)
                         generated_changed="${generated_changed:+$generated_changed, }$file"
                         ;;
                     README.md|CLAUDE.md|AGENTS.md|docs/runbooks/*)
@@ -70,6 +140,10 @@ fi
 
 # --- Build context ---
 config_block="## Active Configuration (source: ${config_source})\n\n\`\`\`yaml\n${user_config}\n\`\`\`"
+
+if [ -n "$prereq_lines" ]; then
+    config_block="${config_block}\n\n## Prerequisites\n\n${prereq_lines}"
+fi
 
 if [ -n "$drift_summary" ]; then
     config_block="${config_block}\n\n## Drift Detection\n\n${drift_summary}"

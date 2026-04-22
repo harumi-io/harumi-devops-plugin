@@ -1,0 +1,70 @@
+{
+  "skill_name": "deploy-app",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Deploy the 'payments' app to prod. App port: 8000. Health check path: /api/health. App repo: harumi-io/payments. Target cluster: eks-prod. During the preflight checks, the Secrets Manager secret 'harumi/payments/prod' does not exist — aws secretsmanager get-secret-value returns a ResourceNotFoundException.",
+      "expected_output": "Runs the preflight checks, detects that the Secrets Manager secret is missing, reports the failure clearly, and stops before generating any manifests.",
+      "files": [],
+      "expectations": [
+        "Runs aws secretsmanager get-secret-value for the secret path harumi/payments/prod",
+        "Detects the ResourceNotFoundException and treats it as a preflight failure",
+        "Does NOT generate any Kubernetes manifests or CI workflow files",
+        "Reports the missing secret clearly and stops work until it is resolved"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Deploy the 'frontend' app to prod. App port: 3000. Health check path: /health. App repo: harumi-io/frontend. Target cluster: eks-prod. The Secrets Manager secret 'harumi/frontend/prod' exists but when we list its keys with jq 'keys', the output does not include NEXT_PUBLIC_SUPABASE_ANON_KEY. The app's ExternalSecret references that key.",
+      "expected_output": "Runs the preflight checks, detects that the required key NEXT_PUBLIC_SUPABASE_ANON_KEY is absent from the secret, reports the missing key clearly, and stops before generating manifests.",
+      "files": [],
+      "expectations": [
+        "Runs aws secretsmanager get-secret-value and pipes to jq 'keys' to inspect the secret contents",
+        "Identifies that NEXT_PUBLIC_SUPABASE_ANON_KEY is missing from the returned keys",
+        "Does NOT generate any Kubernetes manifests or CI workflow files",
+        "Reports the missing key as a preflight blocker and stops work"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Deploy the 'harumi-api' app to prod. App port: 8080. Health check path: /api/health. App repo: harumi-io/harumi-api. Target cluster: eks-prod. During preflight, aws ecr describe-repositories returns a RepositoryNotFoundException for 'harumi-harumi-api'.",
+      "expected_output": "Runs the preflight checks, detects the missing ECR repository, reports the failure clearly, and stops before generating any manifests.",
+      "files": [],
+      "expectations": [
+        "Runs aws ecr describe-repositories --repository-names harumi-harumi-api",
+        "Detects the RepositoryNotFoundException and treats it as a preflight failure",
+        "Does NOT generate any Kubernetes manifests or CI workflow files",
+        "Reports the missing ECR repository clearly and stops work until it is resolved"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Deploy the 'frontend' app to prod. App port: 3000. Health check path: /health. App repo: harumi-io/frontend. Target cluster: eks-prod. Deployment shape: isolated-prod-test. ArgoCD app filename: argocd-app-prod.yaml. CI workflow filename: cd-eks-prod.yaml. Initial targetRevision: feature/payments-v2.",
+      "expected_output": "Runs Step 2 cluster inspection and all Step 3 preflight checks before generating manifests. After preflight passes, generates argocd-app-prod.yaml at the repo root with targetRevision 'feature/payments-v2' and destination.namespace 'frontend-prod-test', all deploy/ manifests with namespace 'frontend-prod-test', and .github/workflows/cd-eks-prod.yaml. Runs the Step 6 branch protection bypass directly (does not hand it off). Provides a Step 7 handoff that includes pushing manifests to the app repo, kubectl apply -f argocd-app-prod.yaml, and the full isolated-prod-test post-apply verification: argocd app get frontend-prod-test, kubectl get pods -n frontend-prod-test, and curl to the health endpoint.",
+      "files": [],
+      "expectations": [
+        "Runs argocd app list to check for an existing conflicting ArgoCD application before generating manifests (Step 2)",
+        "Runs kubectl get namespace frontend --context eks-prod to check whether the namespace already exists (Step 2)",
+        "Runs aws secretsmanager get-secret-value for the secret path harumi/frontend/prod as a preflight check (Step 3)",
+        "Pipes the secret value through jq 'keys' to validate required keys are present in the secret (Step 3)",
+        "Runs aws ecr describe-repositories --repository-names harumi-frontend for the prod ECR repository as a preflight check (Step 3)",
+        "Extracts the OIDC role name from the ARN using awk -F'/' '{print $NF}' before calling aws iam get-role, then queries --query Role.AssumeRolePolicyDocument and verifies the output includes token.actions.githubusercontent.com as the Federated principal and a Condition scoped to repo:harumi-io/frontend:* (Step 3)",
+        "Checks the ArgoCD repo secret in-cluster via kubectl get secret -n argocd --context eks-prod | rg repo (Step 3)",
+        "Checks the target cluster context exists locally via kubectl config get-contexts -o name | rg \"^eks-prod$\" (Step 3)",
+        "Does NOT generate any manifests until all preflight checks pass",
+        "Creates argocd-app-prod.yaml at the repo root, not argocd-app.yaml",
+        "Sets targetRevision to 'feature/payments-v2' in argocd-app-prod.yaml",
+        "Sets destination.namespace to 'frontend-prod-test' in argocd-app-prod.yaml",
+        "Creates .github/workflows/cd-eks-prod.yaml, not cd-eks.yaml",
+        "All namespace: fields in deploy/ manifests use 'frontend-prod-test', not 'frontend'",
+        "Does NOT modify or overwrite argocd-app.yaml if it already exists",
+        "Runs the branch protection bypass script directly for the feature branch 'feature/payments-v2' (Step 6) — does NOT hand it off to the user",
+        "Handoff includes a step to push manifests to the app repo (Step 7)",
+        "Handoff includes kubectl apply -f argocd-app-prod.yaml --context eks-prod to register the ArgoCD app (Step 7)",
+        "Post-apply verification includes argocd app get frontend-prod-test (Step 7)",
+        "Post-apply verification includes kubectl get pods -n frontend-prod-test --context eks-prod (Step 7)",
+        "Post-apply verification includes a curl command to the health endpoint (Step 7)"
+      ]
+    }
+  ]
+}
