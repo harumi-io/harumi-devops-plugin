@@ -46,6 +46,7 @@
         "Runs argocd app list to check for an existing conflicting ArgoCD application before generating manifests (Step 2)",
         "Runs kubectl get namespace frontend-prod-test to check whether the namespace already exists (Step 2)",
         "Runs aws secretsmanager get-secret-value for the secret path harumi/frontend/prod as a preflight check (Step 3)",
+        "Pipes the secret value through jq 'keys' to validate required keys are present in the secret (Step 3)",
         "Runs aws ecr describe-repositories --repository-names harumi-frontend for the prod ECR repository as a preflight check (Step 3)",
         "Checks that the OIDC role exists via aws iam get-role as a preflight check (Step 3)",
         "Checks that the ArgoCD repo secret exists in-cluster via kubectl get secret -n argocd as a preflight check (Step 3)",
