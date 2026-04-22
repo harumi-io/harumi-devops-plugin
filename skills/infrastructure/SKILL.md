@@ -72,15 +72,18 @@ If `terraform plan` output shows changes outside the requested scope, do not sil
 
 2. **Prove pre-existing** — for each out-of-scope resource, check whether the drift predates this branch:
    ```bash
-   # Diff the resource's Terraform source against the branch baseline
+   # Check whether this branch touched the resource's Terraform source
+   # (replace 'main' with the actual trunk branch for this repo, e.g. 'master', 'develop')
    git diff origin/main -- [path/to/module.tf]
 
-   # Confirm the live resource's actual value with the cloud CLI
+   # Read the live resource's actual value with the cloud CLI
    aws ec2 describe-[resource] --[id-flag] [id]
    aws iam get-[resource] --[name-flag] [name]
    # (use the relevant service command)
    ```
-   If the git diff shows no change and the live value matches state, the drift is pre-existing and was present before this branch.
+   Drift is pre-existing when **both** conditions hold:
+   - The git diff is clean — this branch made no changes to that resource's source
+   - The live resource differs from the desired state in the plan — meaning the gap existed before this branch and was not introduced by it
 
 3. **Isolate** — if the out-of-scope drift is confirmed pre-existing and isolated from the requested change, present it to the operator for a separate decision:
    ```
