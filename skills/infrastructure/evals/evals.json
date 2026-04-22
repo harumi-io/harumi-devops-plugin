@@ -42,7 +42,7 @@
     },
     {
       "id": 4,
-      "prompt": "terraform plan output shows drift in module.vpc and module.rds (resources we are not changing today). I only want to apply changes to module.s3_artifacts. Use target='module.s3_artifacts'.",
+      "prompt": "terraform plan output shows drift in module.vpc (source: modules/vpc/main.tf, live VPC ID: vpc-0a1b2c3d4e) and module.rds (source: modules/rds/main.tf, live instance: harumi-prod-db). I only want to apply changes to module.s3_artifacts (source: modules/s3_artifacts/main.tf). Use target='module.s3_artifacts'.",
       "expected_output": "Identifies the out-of-scope drift in module.vpc and module.rds. Proves the drift is pre-existing by running git diff and the relevant cloud CLI commands before proceeding. Presents the unrelated drift to the operator with a separate targeted plan recommendation using the documented quoted -target syntax. Runs a targeted plan for module.s3_artifacts review only. Does NOT jump to an apply handoff until the operator has reviewed the targeted plan and confirmed.",
       "files": [],
       "expectations": [
